@@ -152,7 +152,7 @@ class UniformityController extends Controller
 
             // 1 file = 1 minggu -> hapus semua data lama sebelum insert data baru
             DB::transaction(function () use ($rowsToInsert) {
-                UniformityReport::truncate();
+                UniformityReport::query()->delete();
                 foreach (array_chunk($rowsToInsert, 200) as $chunk) {
                     UniformityReport::insert($chunk);
                 }

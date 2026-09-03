@@ -186,6 +186,9 @@
                     <div id="regionTabs">
                         <button class="tab-region active" data-region="" onclick="setRegion('', this)">Nasional</button>
                     </div>
+                    <div id="regionTabs">
+    <button class="tab-region" data-region="__JAWA__" onclick="setRegion('__JAWA__', this)">Jawa</button>
+</div>
                     <div class="mt-2">
                         <select id="plantSelect" class="form-select form-select-sm" style="max-width:280px; display:inline-block;" onchange="setPlant(this.value)">
                             <option value="">-- Semua Plant --</option>
@@ -252,6 +255,7 @@
 
         const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
         const TARGET_DEFAULT = 0.8;
+        const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
 
         async function handleExcelUpload(input) {
             const file = input.files[0];
@@ -319,22 +323,24 @@
         }
 
         function populatePlantDropdown() {
-            const select = document.getElementById('plantSelect');
-            select.innerHTML = `<option value="">-- Semua Plant ${currentRegion ? 'di ' + currentRegion : '(Nasional)'} --</option>`;
-            let plantList = [];
-            if (currentRegion === '') {
-                Object.values(plantsByRegion).forEach(list => plantList.push(...list));
-            } else {
-                plantList = plantsByRegion[currentRegion] || [];
-            }
-            plantList.sort();
-            plantList.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p;
-                opt.innerText = p;
-                select.appendChild(opt);
-            });
-        }
+    const select = document.getElementById('plantSelect');
+    select.innerHTML = `<option value="">-- Semua Plant ${currentRegion ? 'di ' + (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) : '(Nasional)'} --</option>`;
+    let plantList = [];
+    if (currentRegion === '') {
+        Object.values(plantsByRegion).forEach(list => plantList.push(...list));
+    } else if (currentRegion === '__JAWA__') {
+        JAWA_REGIONS.forEach(r => plantList.push(...(plantsByRegion[r] || [])));
+    } else {
+        plantList = plantsByRegion[currentRegion] || [];
+    }
+    plantList.sort();
+    plantList.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.innerText = p;
+        select.appendChild(opt);
+    });
+}
 
         function setRegion(region, btnEl) {
             currentRegion = region;
@@ -351,20 +357,21 @@
         }
 
         function buildQuery() {
-            const params = new URLSearchParams();
-            if (currentRegion) params.set('region', currentRegion);
-            return params.toString();
-        }
+    const params = new URLSearchParams();
+    if (currentRegion && currentRegion !== '__JAWA__') params.set('region', currentRegion);
+    return params.toString();
+}
 
         function updateChartTitle() {
-            let title = 'Nasional - Semua Plant';
-            if (currentPlant) title = currentPlant;
-            else if (currentRegion) title = 'Region ' + currentRegion + ' - Semua Plant';
-            document.getElementById('chartTitle').innerText = title;
+    let title = 'Nasional - Semua Plant';
+    if (currentPlant) title = currentPlant;
+    else if (currentRegion === '__JAWA__') title = 'Jawa - Semua Plant';
+    else if (currentRegion) title = 'Region ' + currentRegion + ' - Semua Plant';
+    document.getElementById('chartTitle').innerText = title;
 
-            const scopeText = currentPlant || currentRegion || 'Nasional';
+    const scopeText = currentPlant || (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) || 'Nasional';
     document.getElementById('chartScopeBadge').innerText = scopeText;
-        }
+}
 
         // Gabungkan banyak baris jadi total per size (dipakai utk chart ringkasan)
         function aggregateBySize(rows) {
@@ -417,20 +424,25 @@
                 const res = await fetch(`${ROUTES.data}?${qs}`);
                 const rows = await res.json();
 
-                if (!rows || rows.length === 0) {
-                    showEmptyState(true);
-                    return;
-                }
-                showEmptyState(false);
+let scopedRows = rows;
+if (currentRegion === '__JAWA__') {
+    scopedRows = rows.filter(r => JAWA_REGIONS.includes(r.region));
+}
 
-                document.getElementById('infoWeek').innerText = rows[0]?.week_label ? `Data minggu: ${rows[0].week_label}` : '';
+if (!scopedRows || scopedRows.length === 0) {
+    showEmptyState(true);
+    return;
+}
+showEmptyState(false);
 
-                const rowsForChart = currentPlant ? rows.filter(r => r.plant === currentPlant) : rows;
+document.getElementById('infoWeek').innerText = scopedRows[0]?.week_label ? `Data minggu: ${scopedRows[0].week_label}` : '';
 
-                const agg = aggregateBySize(rowsForChart);
-                updateStatStrip(agg);
-                renderChart(agg);
-                renderPlantTable(groupByPlant(rows));
+const rowsForChart = currentPlant ? scopedRows.filter(r => r.plant === currentPlant) : scopedRows;
+
+const agg = aggregateBySize(rowsForChart);
+updateStatStrip(agg);
+renderChart(agg);
+renderPlantTable(groupByPlant(scopedRows));
             } catch (err) {
                 console.error(err);
                 showEmptyState(true);
