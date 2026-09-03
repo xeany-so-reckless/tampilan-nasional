@@ -136,7 +136,7 @@
             <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-industry"></i> Modul Slaughter House</h4>
             <div class="row g-4">
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between" 
                         onclick="window.location.href='{{ route('slaughter.uniformity.index') }}'">
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Uniformity Mingguan</h6>
