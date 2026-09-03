@@ -190,6 +190,9 @@
                         <select id="plantSelect" class="form-select form-select-sm" style="max-width:280px; display:inline-block;" onchange="setPlant(this.value)">
                             <option value="">-- Semua Plant --</option>
                         </select>
+                        <select id="weekSelect" class="form-select form-select-sm" style="max-width:200px; display:inline-block; margin-left:8px;" onchange="setWeek(this.value)">
+                    <option value="">-- Minggu Terbaru --</option>
+                </select>
                     </div>
                 </div>
 
@@ -246,6 +249,7 @@
 
         let currentRegion = '';
         let currentPlant = '';
+        let currentWeek = '';
         let plantsByRegion = {};
         let chartInstance = null;
         let expandedPlants = new Set();
@@ -331,6 +335,7 @@
     }
 
     populatePlantDropdown();
+    populateWeekDropdown(opts.weeks || []);
 }
 
         function populatePlantDropdown() {
@@ -353,6 +358,24 @@
     });
 }
 
+// TAMBAHKAN FUNGSI INI
+function populateWeekDropdown(weeks) {
+    const select = document.getElementById('weekSelect');
+    select.innerHTML = `<option value="">-- Minggu Terbaru --</option>`;
+    weeks.forEach(w => {
+        const opt = document.createElement('option');
+        opt.value = w.week_label;
+        opt.innerText = w.week_label;
+        select.appendChild(opt);
+    });
+}
+
+// TAMBAHKAN FUNGSI INI
+function setWeek(week) {
+    currentWeek = week;
+    refreshView();
+}
+
         function setRegion(region, btnEl) {
             currentRegion = region;
             currentPlant = '';
@@ -370,6 +393,7 @@
         function buildQuery() {
     const params = new URLSearchParams();
     if (currentRegion && currentRegion !== '__JAWA__') params.set('region', currentRegion);
+    if (currentWeek) params.set('week', currentWeek);
     return params.toString();
 }
 

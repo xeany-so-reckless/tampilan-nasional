@@ -151,12 +151,12 @@ class UniformityController extends Controller
             }
 
             // 1 file = 1 minggu -> hapus semua data lama sebelum insert data baru
-            DB::transaction(function () use ($rowsToInsert) {
-                UniformityReport::query()->delete();
-                foreach (array_chunk($rowsToInsert, 200) as $chunk) {
-                    UniformityReport::insert($chunk);
-                }
-            });
+            DB::transaction(function () use ($rowsToInsert, $weekLabel) {
+    UniformityReport::where('week_label', $weekLabel)->delete();
+    foreach (array_chunk($rowsToInsert, 200) as $chunk) {
+        UniformityReport::insert($chunk);
+    }
+});
 
             return response()->json([
                 'message'  => 'Upload berhasil diproses.',
@@ -178,41 +178,58 @@ class UniformityController extends Controller
      * - tanpa filter              -> semua data (dipakai utk hitung agregat Nasional)
      */
     public function data(Request $request)
-    {
-        $query = UniformityReport::query();
+{
+    $query = UniformityReport::query();
 
-        if ($request->filled('region')) {
-            $query->where('region', $request->input('region'));
-        }
-
-        if ($request->filled('plant')) {
-            $query->where('plant', $request->input('plant'));
-        }
-
-        return response()->json($query->get());
+    // Kalau user tidak pilih minggu spesifik, otomatis ambil minggu terbaru
+    $week = $request->input('week');
+    if (!$week) {
+        $week = UniformityReport::max('tanggal_mulai')
+            ? UniformityReport::orderByDesc('tanggal_mulai')->value('week_label')
+            : null;
     }
+    if ($week) {
+        $query->where('week_label', $week);
+    }
+
+    if ($request->filled('region')) {
+        $query->where('region', $request->input('region'));
+    }
+
+    if ($request->filled('plant')) {
+        $query->where('plant', $request->input('plant'));
+    }
+
+    return response()->json($query->get());
+}
 
     /**
      * Daftar region & plant (dikelompokkan per region) untuk isi dropdown filter.
      */
     public function filterOptions()
-    {
-        $rows = UniformityReport::select('region', 'plant')->distinct()->get();
+{
+    $rows = UniformityReport::select('region', 'plant')->distinct()->get();
 
-        $grouped = [];
-        foreach ($rows as $row) {
-            $grouped[$row->region][] = $row->plant;
-        }
-        foreach ($grouped as $region => $plants) {
-            $grouped[$region] = array_values(array_unique($plants));
-            sort($grouped[$region]);
-        }
-
-        return response()->json([
-            'regions' => array_keys($grouped),
-            'plants_by_region' => $grouped,
-        ]);
+    $grouped = [];
+    foreach ($rows as $row) {
+        $grouped[$row->region][] = $row->plant;
     }
+    foreach ($grouped as $region => $plants) {
+        $grouped[$region] = array_values(array_unique($plants));
+        sort($grouped[$region]);
+    }
+
+    $weeks = UniformityReport::select('week_label', 'tanggal_mulai')
+        ->distinct()
+        ->orderByDesc('tanggal_mulai')
+        ->get();
+
+    return response()->json([
+        'regions' => array_keys($grouped),
+        'plants_by_region' => $grouped,
+        'weeks' => $weeks, // [{week_label: "Week 35", tanggal_mulai: "2026-08-24"}, ...]
+    ]);
+}
 
     private function numOrNull($value)
     {
