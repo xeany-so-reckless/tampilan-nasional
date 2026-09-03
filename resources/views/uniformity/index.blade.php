@@ -159,22 +159,22 @@
 
         <div class="stat-strip" id="statStrip">
             <div class="stat-box" id="statBoxAK">
-                <div class="stat-label">% Standart AK</div>
+                <div class="stat-label">% LB Standart AK</div>
                 <div class="stat-value" id="statAK">-</div>
                 <div class="stat-sub" id="statSubAK"></div>
             </div>
             <div class="stat-box" id="statBoxAM">
-                <div class="stat-label">% Standart AM</div>
+                <div class="stat-label">% LB Standart AM</div>
                 <div class="stat-value" id="statAM">-</div>
                 <div class="stat-sub" id="statSubAM"></div>
             </div>
             <div class="stat-box" id="statBoxAB">
-                <div class="stat-label">% Standart AB</div>
+                <div class="stat-label">% LB Standart AB</div>
                 <div class="stat-value" id="statAB">-</div>
                 <div class="stat-sub" id="statSubAB"></div>
             </div>
             <div class="stat-box" id="statBoxAJ">
-                <div class="stat-label">% Standart AJ</div>
+                <div class="stat-label">% LB Standart AJ</div>
                 <div class="stat-value" id="statAJ">-</div>
                 <div class="stat-sub" id="statSubAJ"></div>
             </div>
@@ -186,9 +186,6 @@
                     <div id="regionTabs">
                         <button class="tab-region active" data-region="" onclick="setRegion('', this)">Nasional</button>
                     </div>
-                    <div id="regionTabs">
-    <button class="tab-region" data-region="__JAWA__" onclick="setRegion('__JAWA__', this)">Jawa</button>
-</div>
                     <div class="mt-2">
                         <select id="plantSelect" class="form-select form-select-sm" style="max-width:280px; display:inline-block;" onchange="setPlant(this.value)">
                             <option value="">-- Semua Plant --</option>
@@ -303,24 +300,38 @@
         }
 
         async function loadFilterOptions() {
-            const res = await fetch(ROUTES.filterOptions);
-            const opts = await res.json();
-            plantsByRegion = opts.plants_by_region || {};
+    const res = await fetch(ROUTES.filterOptions);
+    const opts = await res.json();
+    plantsByRegion = opts.plants_by_region || {};
 
-            const tabWrap = document.getElementById('regionTabs');
-            tabWrap.querySelectorAll('.tab-region[data-region]:not([data-region=""])').forEach(el => el.remove());
+    const tabWrap = document.getElementById('regionTabs');
+    tabWrap.querySelectorAll('.tab-region[data-region]:not([data-region=""])').forEach(el => el.remove());
 
-            (opts.regions || []).forEach(region => {
-                const btn = document.createElement('button');
-                btn.className = 'tab-region';
-                btn.dataset.region = region;
-                btn.innerText = region;
-                btn.onclick = () => setRegion(region, btn);
-                tabWrap.appendChild(btn);
-            });
+    (opts.regions || []).forEach(region => {
+        const btn = document.createElement('button');
+        btn.className = 'tab-region';
+        btn.dataset.region = region;
+        btn.innerText = region;
+        btn.onclick = () => setRegion(region, btn);
+        tabWrap.appendChild(btn);
+    });
 
-            populatePlantDropdown();
-        }
+    // Tombol "Jawa" (gabungan Banten, Jabar, Jateng, Jatim) - taruh persis di sebelah kanan Jatim
+    const jawaBtn = document.createElement('button');
+    jawaBtn.className = 'tab-region';
+    jawaBtn.dataset.region = '__JAWA__';
+    jawaBtn.innerText = 'Jawa';
+    jawaBtn.onclick = () => setRegion('__JAWA__', jawaBtn);
+
+    const jatimBtn = tabWrap.querySelector('[data-region="Jatim"]');
+    if (jatimBtn) {
+        jatimBtn.insertAdjacentElement('afterend', jawaBtn);
+    } else {
+        tabWrap.appendChild(jawaBtn); // fallback kalau Jatim belum ada datanya
+    }
+
+    populatePlantDropdown();
+}
 
         function populatePlantDropdown() {
     const select = document.getElementById('plantSelect');
@@ -606,7 +617,7 @@ renderPlantTable(groupByPlant(scopedRows));
                     <div class="row-metric"><span>% Standart</span><b>${(data.persen_standart * 100).toFixed(1)}%</b></div>
                     <div class="row-metric"><span>% Under</span><b>${(data.persen_under * 100).toFixed(1)}%</b></div>
                     <div class="row-metric"><span>% Over</span><b>${(data.persen_over * 100).toFixed(1)}%</b></div>
-                    <div class="row-metric"><span>Target</span><b>${(data.target * 100).toFixed(0)}%</b></div>
+                    <div class="row-metric"><span>Target</span><b style="color:#16a34a;">${(data.target * 100).toFixed(0)}%</b></div>
                     <div class="gap-line ${gapClass}">${gapText}</div>
                 </div>
             `;
