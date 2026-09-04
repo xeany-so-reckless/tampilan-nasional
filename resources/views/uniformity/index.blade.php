@@ -650,7 +650,7 @@ renderPlantTable(groupByPlant(scopedRows));
                     <div class="row-metric"><span>% Standart</span><b>${(data.persen_standart * 100).toFixed(1)}%</b></div>
                     <div class="row-metric"><span>% Under</span><b>${(data.persen_under * 100).toFixed(1)}%</b></div>
                     <div class="row-metric"><span>% Over</span><b>${(data.persen_over * 100).toFixed(1)}%</b></div>
-                    <div class="row-metric"><span>Target</span><b style="color:#16a34a;">${(data.target * 100).toFixed(0)}%</b></div>
+                    <div class="row-metric"><span style="color:#16a34a;">Target</span><b style="color:#16a34a;">${(data.target * 100).toFixed(0)}%</b></div>
                     <div class="gap-line ${gapClass}">${gapText}</div>
                 </div>
             `;
