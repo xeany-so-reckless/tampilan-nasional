@@ -116,6 +116,50 @@
             pointer-events: none;
             opacity: 0.6;
         }
+
+        @keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(25px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.hero-title {
+    opacity: 0;
+    animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.hero-subtitle {
+    opacity: 0;
+    animation: fadeInUp 0.8s ease-out forwards;
+    animation-delay: 0.2s;
+}
+
+@keyframes gradientFlow {
+    0% {
+        background-position: 0% 50%;
+    }
+    100% {
+        background-position: 200% 50%;
+    }
+}
+
+.hero-divider {
+    opacity: 0;
+    animation: fadeInUp 0.8s ease-out forwards, gradientFlow 3s linear infinite;
+    animation-delay: 0.4s, 0.4s;
+    height: 4px;
+    width: 80px;
+    background: linear-gradient(90deg, #ffffff, #94d2bd, #ffffff, #94d2bd);
+    background-size: 200% 100%;
+    border: none;
+    border-radius: 3px;
+    margin: 15px 0;
+}
     </style>
 </head>
 <body>
@@ -160,11 +204,12 @@
         <div class="container">
             <div class="row align-items-center">
                 <div class="col-lg-7">
-                    <h1 class="fw-bold display-6 mb-3">Rekapitulasi Laporan Nasional Food - Division</h1>
-                    <p class="lead mb-4">Sistem monitoring laporan produksi dari Live Birds hingga Finished Goods.</p>
-                    <div class="input-group bg-white p-2 rounded-pill shadow-sm" style="max-width: 500px;">
-                    </div>
-                </div>
+    <h1 class="fw-bold display-6 mb-3 hero-title">Rekapitulasi Laporan Nasional Food - Division</h1>
+    <hr class="hero-divider">
+    <p class="lead mb-4 hero-subtitle">Sistem monitoring laporan produksi dari Live Birds hingga Finished Goods.</p>
+    {{-- <div class="input-group bg-white p-2 rounded-pill shadow-sm" style="max-width: 500px;">
+    </div> --}}
+</div>
                 <div class="col-lg-5 text-center mt-4 mt-lg-0">
                     <div class="bg-white p-4 rounded shadow text-dark text-start">
                         <h5 class="fw-bold mb-2"><i class="fa-solid fa-chart-line text-success"></i> Average Data Nasional</h5>
