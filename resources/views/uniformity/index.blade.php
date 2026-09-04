@@ -514,86 +514,86 @@ renderPlantTable(groupByPlant(scopedRows));
         }
 
         function renderChart(agg) {
-            const ctx = document.getElementById('uniformityChart').getContext('2d');
-            const labels = agg.map(a => a.size);
-            const targetPct = (agg[0]?.target ?? TARGET_DEFAULT) * 100;
+    const ctx = document.getElementById('uniformityChart').getContext('2d');
+    const labels = agg.map(a => a.size);
+    const targetPct = (agg[0]?.target ?? TARGET_DEFAULT) * 100;
 
-            const datasets = [
-                {
-                    type: 'bar',
-                    label: '% Standart',
-                    data: agg.map(a => Number((a.persen_standart * 100).toFixed(1))),
-                    backgroundColor: '#16a34a',
-                    borderRadius: 6,
-                    datalabels: { anchor: 'end', align: 'top', color: '#16a34a', font: { weight: 'bold', size: 11 } },
-                },
-                {
-                    type: 'bar',
-                    label: '% Under',
-                    data: agg.map(a => Number((a.persen_under * 100).toFixed(1))),
-                    backgroundColor: '#f87171',
-                    borderRadius: 6,
-                    datalabels: { anchor: 'end', align: 'top', color: '#b91c1c', font: { weight: 'bold', size: 11 } },
-                },
-                {
-                    type: 'bar',
-                    label: '% Over',
-                    data: agg.map(a => Number((a.persen_over * 100).toFixed(1))),
-                    backgroundColor: '#f59e0b',
-                    borderRadius: 6,
-                    datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
-                },
-                {
-type: 'line',
-label: `Target Standart (${targetPct}%)`,
-data: agg.map(() => targetPct),
-borderColor: '#16a34a',
-borderDash: [6, 4],
-pointRadius: 0,
-borderWidth: 2,
-datalabels: {
-    display: (context) => context.dataIndex === context.dataset.data.length - 1,
-    align: 'right',
-    anchor: 'end',
-    color: '#16a34a',
-    font: { weight: 'bold', size: 11 },
-    formatter: () => targetPct + '%',
-},
-},
-            ];
+    const datasets = [
+        {
+            type: 'bar',
+            label: '% Standart',
+            data: agg.map(a => Number((a.persen_standart * 100).toFixed(1))),
+            backgroundColor: '#16a34a',
+            borderRadius: 6,
+            datalabels: { anchor: 'end', align: 'top', color: '#16a34a', font: { weight: 'bold', size: 11 } },
+        },
+        {
+            type: 'bar',
+            label: '% Under',
+            data: agg.map(a => Number((a.persen_under * 100).toFixed(1))),
+            backgroundColor: '#f87171',
+            borderRadius: 6,
+            datalabels: { anchor: 'end', align: 'top', color: '#b91c1c', font: { weight: 'bold', size: 11 } },
+        },
+        {
+            type: 'bar',
+            label: '% Over',
+            data: agg.map(a => Number((a.persen_over * 100).toFixed(1))),
+            backgroundColor: '#f59e0b',
+            borderRadius: 6,
+            datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
+        },
+    ];
 
-            if (chartInstance) chartInstance.destroy();
+    // Plugin custom: gambar garis target lurus penuh dari ujung kiri sampai ujung kanan chart
+    const targetLinePlugin = {
+        id: 'targetLinePlugin',
+        afterDatasetsDraw(chart) {
+            const { ctx, chartArea, scales } = chart;
+            const y = scales.y.getPixelForValue(targetPct);
 
-             chartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: { labels, datasets },
-                options: {
-                    responsive: true,
-                    layout: {
-                        padding: {
-                            left: 20,
-                            right: 30,
-                        },
-                    },
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        datalabels: {
-                            formatter: (v) => v + '%',
-                        },
-                    },
-                    scales: {
-                        x: {
-                            offset: false,
-                        },
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { callback: (v) => v + '%' },
-                        },
-                    },
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash([6, 4]);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#16a34a';
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#16a34a';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Target (${targetPct}%)`, chartArea.right, y - 6);
+            ctx.restore();
+        },
+    };
+
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets },
+        plugins: [targetLinePlugin],
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' },
+                datalabels: {
+                    formatter: (v) => v + '%',
                 },
-            });
-        }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { callback: (v) => v + '%' },
+                },
+            },
+        },
+    });
+}
 
         function pctChip(value) {
             const pct = (value * 100).toFixed(1);
