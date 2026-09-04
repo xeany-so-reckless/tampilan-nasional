@@ -565,7 +565,7 @@ renderPlantTable(groupByPlant(scopedRows));
             ctx.fillStyle = '#16a34a';
             ctx.font = 'bold 11px sans-serif';
             ctx.textAlign = 'right';
-            ctx.fillText(`Target (${targetPct}%)`, chartArea.right, y - 6);
+            ctx.fillText(`Target LB Standard (${targetPct}%)`, chartArea.right, y - 6);
             ctx.restore();
         },
     };
