@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    
+
     <style>
         /* Styling Running Text & Timestamp Top Ticker */
         .top-ticker {
@@ -52,6 +52,8 @@
             padding: 50px 0;
         }
         .menu-card {
+            position: relative;
+            overflow: visible;
             border: 1px solid #e0e0e0;
             border-radius: 10px;
             transition: all 0.3s ease;
@@ -69,6 +71,51 @@
         .content-section.active {
             display: block;
         }
+
+        /* Badge Pojok Kanan Atas */
+        .badge-corner {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        .badge-active-neon {
+    background: #ffffff;
+    color: #39ff14;
+    border: 1px solid #39ff14;
+    box-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14, 0 0 15px #39ff14;
+    animation: neonPulse 1.5s ease-in-out infinite alternate;
+}
+
+        @keyframes neonPulse {
+            from {
+                box-shadow: 0 0 5px #39ff14, 0 0 10px #39ff14, 0 0 15px #39ff14;
+                opacity: 1;
+            }
+            to {
+                box-shadow: 0 0 2px #39ff14, 0 0 5px #39ff14, 0 0 8px #39ff14;
+                opacity: 0.85;
+            }
+        }
+
+        .badge-coming-soon {
+            background: #6c757d;
+            color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* Kartu yang belum aktif dibuat non-klik dan agak pudar */
+        .menu-card.disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
     </style>
 </head>
 <body>
@@ -79,7 +126,7 @@
         </div>
         <div class="marquee-container">
             <div class="marquee">
-                Selamat Datang di Sistem Integerasi Laporan PT. CHAROEN POKHPAND INDONESIA - FOOD &nbsp; | &nbsp; 1 Halaman Untuk Report Nasional &nbsp; | &nbsp; Tampilan Beta Test
+                Selamat Datang di Sistem Integerasi Laporan PT. CHAROEN POKPHAND INDONESIA - FOOD &nbsp; | &nbsp; 1 Halaman Untuk Report Nasional &nbsp; | &nbsp; Tampilan Beta Test
             </div>
         </div>
     </div>
@@ -131,13 +178,14 @@
     </section>
 
     <main class="container my-5">
-        
+
         <div id="content-slaughter" class="content-section active">
             <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-industry"></i> Modul Slaughter House</h4>
             <div class="row g-4">
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between" 
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
                         onclick="window.location.href='{{ route('slaughter.uniformity.index') }}'">
+                        <span class="badge-corner badge-active-neon">Active</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Uniformity Mingguan</h6>
                             <small class="text-muted">Kelola data keseragaman bobot</small>
@@ -146,7 +194,8 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Yield Mingguan</h6>
                             <small class="text-muted">Analisis persentase karkas</small>
@@ -155,7 +204,8 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Laporan Penerimaan Live Birds</h6>
                             <small class="text-muted">Data masuk ayam hidup harian</small>
@@ -194,7 +244,8 @@
             <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-warehouse"></i> Modul Warehouse</h4>
             <div class="row g-4">
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Laporan Stock Warehouse</h6>
                             <small class="text-muted">Cek ketersediaan barang jadi</small>
@@ -203,7 +254,8 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Pengiriman / Outbound</h6>
                             <small class="text-muted">Jadwal & status distribusi</small>
@@ -212,7 +264,8 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Monitoring Suhu CS</h6>
                             <small class="text-muted">Cold Storage real-time tracking</small>
@@ -226,7 +279,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <script>
         // Fungsi untuk mengganti tab konten
         function switchTab(tabName, event) {
@@ -256,16 +309,16 @@
             const options = { day: 'numeric', month: 'long', year: 'numeric' };
             const dateStr = now.toLocaleDateString('id-ID', options);
             const timeStr = now.toLocaleTimeString('id-ID', { hour12: false });
-            
+
             const datetimeElement = document.getElementById('current-datetime');
             if (datetimeElement) {
                 datetimeElement.innerHTML = `
-                    
+
                     ${dateStr} &nbsp;|&nbsp; ${timeStr} WIB
                 `;
             }
         }
-        
+
         // Jalankan interval real-time setiap 1 detik
         setInterval(updateDateTime, 1000);
         updateDateTime();

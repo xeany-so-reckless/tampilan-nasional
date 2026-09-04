@@ -544,31 +544,37 @@ renderPlantTable(groupByPlant(scopedRows));
                     datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
                 },
                 {
-                type: 'line',
-                label: `Target Standart (${targetPct}%)`,
-                data: agg.map(() => targetPct),
-                borderColor: '#dc2626',
-                borderDash: [6, 4],
-                pointRadius: 0,
-                borderWidth: 2,
-                datalabels: {
-                    display: (context) => context.dataIndex === context.dataset.data.length - 1,
-                    align: 'right',
-                    anchor: 'end',
-                    color: '#dc2626',
-                    font: { weight: 'bold', size: 11 },
-                    formatter: () => targetPct + '%',
-                },
-                },
+type: 'line',
+label: `Target Standart (${targetPct}%)`,
+data: agg.map(() => targetPct),
+borderColor: '#16a34a',
+borderDash: [6, 4],
+pointRadius: 0,
+borderWidth: 2,
+datalabels: {
+    display: (context) => context.dataIndex === context.dataset.data.length - 1,
+    align: 'right',
+    anchor: 'end',
+    color: '#16a34a',
+    font: { weight: 'bold', size: 11 },
+    formatter: () => targetPct + '%',
+},
+},
             ];
 
             if (chartInstance) chartInstance.destroy();
 
-            chartInstance = new Chart(ctx, {
+             chartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: { labels, datasets },
                 options: {
                     responsive: true,
+                    layout: {
+                        padding: {
+                            left: 20,
+                            right: 30,
+                        },
+                    },
                     plugins: {
                         legend: { position: 'bottom' },
                         datalabels: {
@@ -576,6 +582,9 @@ renderPlantTable(groupByPlant(scopedRows));
                         },
                     },
                     scales: {
+                        x: {
+                            offset: false,
+                        },
                         y: {
                             beginAtZero: true,
                             max: 100,
