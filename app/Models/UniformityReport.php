@@ -7,25 +7,23 @@ use Illuminate\Database\Eloquent\Model;
 class UniformityReport extends Model
 {
     protected $fillable = [
-        'week_label',
-        'tanggal_mulai',
-        'tanggal_selesai',
-        'region',
-        'plant',
-        'size',
-        'total_lb',
-        'lb_standart',
-        'lb_under',
-        'lb_over',
-        'persen_standart',
-        'persen_under',
-        'persen_over',
-        'target',
-    ];
+    'week_label',
+    'tanggal',
+    'region',
+    'plant',
+    'size',
+    'total_lb',
+    'lb_standart',
+    'lb_under',
+    'lb_over',
+    'persen_standart',
+    'persen_under',
+    'persen_over',
+    'target',
+];
 
     protected $casts = [
-        'tanggal_mulai' => 'date',
-        'tanggal_selesai' => 'date',
+        'tanggal' => 'date',
         'total_lb' => 'float',
         'lb_standart' => 'float',
         'lb_under' => 'float',

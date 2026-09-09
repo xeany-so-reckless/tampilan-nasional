@@ -143,6 +143,8 @@
         .size-card .gap-line { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 0.75rem; font-weight: 700; }
         .gap-line.ok { color: var(--ok); }
         .gap-line.bad { color: #b91c1c; }
+
+        .btn-detail-plant { white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -196,10 +198,20 @@
                     </div>
                 </div>
 
-                <button class="btn btn-upload btn-sm text-white" onclick="document.getElementById('excelUploadInput').click()">
-                    <i class="fa-solid fa-file-arrow-up"></i> Upload Excel
-                </button>
-                <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
+                                <div class="d-flex align-items-end gap-2 flex-wrap">
+                    <div>
+                        <select id="uploadPlantSelect" class="form-select form-select-sm" style="min-width:180px;">
+                            <option value="">-- Pilih Plant --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="date" id="uploadTanggalInput" class="form-control form-control-sm">
+                    </div>
+                    <button class="btn btn-upload btn-sm text-white" onclick="mulaiUploadExcel()">
+                        <i class="fa-solid fa-file-arrow-up"></i> Upload Excel
+                    </button>
+                    <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
+                </div>
             </div>
             <div class="info-week mt-2" id="infoWeek"></div>
         </div>
@@ -229,6 +241,7 @@
                         <th>AM</th>
                         <th>AB</th>
                         <th>AJ</th>
+                        <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="plantTableBody"></tbody>
@@ -245,24 +258,74 @@
             upload: `{{ route('slaughter.uniformity.upload') }}`,
             data: `{{ route('slaughter.uniformity.data') }}`,
             filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
+            detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
         };
 
         let currentRegion = '';
         let currentPlant = '';
         let currentWeek = '';
-        let plantsByRegion = {};
+        let plantsByRegion = {};    // plant yang SUDAH ada datanya (dari uniformity_reports) - dipakai utk dropdown filter
+        let allPlantsByRegion = {}; // SEMUA plant terdaftar (dari plantMap backend) - dipakai utk tabel & dropdown upload
         let chartInstance = null;
         let expandedPlants = new Set();
+
+        // Rentang tanggal minggu yang lagi ditampilkan di chart/tabel (dipakai untuk link tombol Detail)
+        let currentViewWeekStart = '';
+        let currentViewWeekEnd = '';
 
         const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
         const TARGET_DEFAULT = 0.8;
         const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
 
-        async function handleExcelUpload(input) {
+        function formatDateYMD(d) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        // Hitung rentang Senin-Minggu (ISO week) dari 1 tanggal acuan
+        function mondaySundayRange(anchor) {
+            const d = new Date(anchor);
+            const day = d.getDay(); // 0=Minggu, 1=Senin, ... 6=Sabtu
+            const isoDay = day === 0 ? 7 : day; // 1..7, Senin=1
+            const monday = new Date(d);
+            monday.setDate(d.getDate() - (isoDay - 1));
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            return { start: formatDateYMD(monday), end: formatDateYMD(sunday) };
+        }
+
+                function mulaiUploadExcel() {
+            const plant = document.getElementById('uploadPlantSelect').value;
+            const tanggal = document.getElementById('uploadTanggalInput').value;
+
+            if (!plant) {
+                Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
+                return;
+            }
+            
+
+            document.getElementById('excelUploadInput').click();
+        }
+
+                async function handleExcelUpload(input) {
             const file = input.files[0];
             if (!file) return;
+
+            const plant = document.getElementById('uploadPlantSelect').value;
+            const tanggal = document.getElementById('uploadTanggalInput').value;
+
+                        if (!plant) {
+                Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
+                input.value = '';
+                return;
+            }
+
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('plant', plant);
+            formData.append('tanggal', tanggal);
 
             Swal.fire({
                 title: 'Memproses Excel...',
@@ -284,13 +347,17 @@
                 if (result.dilewati && result.dilewati.length > 0) {
                     dilewatiHtml = `<div style="text-align:left; max-height:200px; overflow-y:auto; margin-top:12px; font-size:12px;">
                         <b>Dilewati (${result.dilewati.length}):</b>
-                        <ul>${result.dilewati.map(d => `<li>${d.plant}: ${d.alasan}</li>`).join('')}</ul>
+                        <ul>${result.dilewati.map(d => `<li>Baris ${d.baris}: ${d.alasan}</li>`).join('')}</ul>
                     </div>`;
                 }
 
+                                const tanggalText = (result.tanggal_diproses && result.tanggal_diproses.length > 0)
+                    ? result.tanggal_diproses.join(', ')
+                    : '-';
+
                 await Swal.fire({
                     title: 'Selesai!',
-                    html: `<div>${result.berhasil} baris data (${result.week ?? '-'}) berhasil disimpan.</div>${dilewatiHtml}`,
+                    html: `<div>${result.berhasil} baris data (tanggal: ${tanggalText}) berhasil disimpan.</div>${dilewatiHtml}`,
                     icon: (result.dilewati && result.dilewati.length > 0) ? 'warning' : 'success',
                 });
 
@@ -307,11 +374,15 @@
     const res = await fetch(ROUTES.filterOptions);
     const opts = await res.json();
     plantsByRegion = opts.plants_by_region || {};
+    allPlantsByRegion = opts.all_plants_by_region || {};
+        populateUploadPlantDropdown(allPlantsByRegion);
 
     const tabWrap = document.getElementById('regionTabs');
     tabWrap.querySelectorAll('.tab-region[data-region]:not([data-region=""])').forEach(el => el.remove());
 
-    (opts.regions || []).forEach(region => {
+    // Region untuk tab diambil dari SEMUA region terdaftar (bukan cuma yang sudah ada datanya),
+    // supaya tab region tetap muncul lengkap meski belum ada plant yang upload.
+    Object.keys(allPlantsByRegion).forEach(region => {
         const btn = document.createElement('button');
         btn.className = 'tab-region';
         btn.dataset.region = region;
@@ -331,7 +402,7 @@
     if (jatimBtn) {
         jatimBtn.insertAdjacentElement('afterend', jawaBtn);
     } else {
-        tabWrap.appendChild(jawaBtn); // fallback kalau Jatim belum ada datanya
+        tabWrap.appendChild(jawaBtn); // fallback kalau Jatim belum ada di daftar
     }
 
     populatePlantDropdown();
@@ -357,6 +428,22 @@
         select.appendChild(opt);
     });
 }
+
+            function populateUploadPlantDropdown(allPlantsByRegionMap) {
+            const select = document.getElementById('uploadPlantSelect');
+            select.innerHTML = `<option value="">-- Pilih Plant --</option>`;
+            Object.keys(allPlantsByRegionMap).sort().forEach(region => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = region;
+                allPlantsByRegionMap[region].slice().sort().forEach(plant => {
+                    const opt = document.createElement('option');
+                    opt.value = plant;
+                    opt.innerText = plant;
+                    optgroup.appendChild(opt);
+                });
+                select.appendChild(optgroup);
+            });
+        }
 
 // TAMBAHKAN FUNGSI INI
 function populateWeekDropdown(weeks) {
@@ -437,18 +524,68 @@ function setWeek(week) {
         }
 
         // Kelompokkan baris jadi per plant -> per size (dipakai utk tabel detail)
-        function groupByPlant(rows) {
-            const map = {};
+                function groupByPlant(rows) {
+            // Tahap 1: akumulasi angka mentah per plant+size (bisa banyak baris kalau lintas hari)
+            const bucket = {};
             rows.forEach(r => {
-                if (!map[r.plant]) map[r.plant] = {};
-                map[r.plant][r.size] = {
-                    persen_standart: Number(r.persen_standart || 0),
-                    persen_under: Number(r.persen_under || 0),
-                    persen_over: Number(r.persen_over || 0),
-                    target: Number(r.target || TARGET_DEFAULT),
-                };
+                if (!bucket[r.plant]) bucket[r.plant] = {};
+                if (!bucket[r.plant][r.size]) {
+                    bucket[r.plant][r.size] = { total_lb: 0, lb_standart: 0, lb_under: 0, lb_over: 0, target: TARGET_DEFAULT };
+                }
+                bucket[r.plant][r.size].total_lb += Number(r.total_lb || 0);
+                bucket[r.plant][r.size].lb_standart += Number(r.lb_standart || 0);
+                bucket[r.plant][r.size].lb_under += Number(r.lb_under || 0);
+                bucket[r.plant][r.size].lb_over += Number(r.lb_over || 0);
+                bucket[r.plant][r.size].target = Number(r.target || TARGET_DEFAULT);
+            });
+
+            // Tahap 2: baru hitung persentase dari hasil akumulasi
+            const map = {};
+            Object.keys(bucket).forEach(plant => {
+                map[plant] = {};
+                Object.keys(bucket[plant]).forEach(size => {
+                    const b = bucket[plant][size];
+                    const total = b.total_lb;
+                    map[plant][size] = {
+                        persen_standart: total > 0 ? b.lb_standart / total : 0,
+                        persen_under: total > 0 ? b.lb_under / total : 0,
+                        persen_over: total > 0 ? b.lb_over / total : 0,
+                        target: b.target,
+                    };
+                });
             });
             return map;
+        }
+
+        // Daftar SEMUA nama plant untuk scope region yang lagi aktif (Nasional/Jawa/per region),
+        // diambil dari allPlantsByRegion (bukan cuma plant yang sudah ada datanya).
+        function getPlantsForCurrentScope() {
+            let list = [];
+            if (currentRegion === '') {
+                Object.values(allPlantsByRegion).forEach(arr => list.push(...arr));
+            } else if (currentRegion === '__JAWA__') {
+                JAWA_REGIONS.forEach(r => list.push(...(allPlantsByRegion[r] || [])));
+            } else {
+                list = allPlantsByRegion[currentRegion] || [];
+            }
+            return Array.from(new Set(list)).sort();
+        }
+
+        // Gabungkan daftar SEMUA plant (walau belum ada data) dengan data yang sudah ada.
+        // Plant tanpa data akan punya objek kosong {} -> tiap kolom size otomatis tampil "-".
+        function buildFullPlantMap(scopedRows) {
+            const dataMap = groupByPlant(scopedRows);
+            const allPlants = getPlantsForCurrentScope();
+
+            const fullMap = {};
+            allPlants.forEach(p => {
+                fullMap[p] = dataMap[p] || {};
+            });
+            // Jaga-jaga kalau ada plant di data tapi belum terdaftar di allPlantsByRegion (mismatch nama, dll)
+            Object.keys(dataMap).forEach(p => {
+                if (!fullMap[p]) fullMap[p] = dataMap[p];
+            });
+            return fullMap;
         }
 
         async function refreshView() {
@@ -459,35 +596,44 @@ function setWeek(week) {
                 const res = await fetch(`${ROUTES.data}?${qs}`);
                 const rows = await res.json();
 
-let scopedRows = rows;
-if (currentRegion === '__JAWA__') {
-    scopedRows = rows.filter(r => JAWA_REGIONS.includes(r.region));
-}
+                let scopedRows = rows;
+                if (currentRegion === '__JAWA__') {
+                    scopedRows = rows.filter(r => JAWA_REGIONS.includes(r.region));
+                }
 
-if (!scopedRows || scopedRows.length === 0) {
-    showEmptyState(true);
-    return;
-}
-showEmptyState(false);
+                const isChartEmpty = !scopedRows || scopedRows.length === 0;
+                showChartEmptyState(isChartEmpty);
 
-document.getElementById('infoWeek').innerText = scopedRows[0]?.week_label ? `Data minggu: ${scopedRows[0].week_label}` : '';
+                document.getElementById('infoWeek').innerText = (!isChartEmpty && scopedRows[0]?.week_label)
+                    ? `Data minggu: ${scopedRows[0].week_label}`
+                    : '';
 
-const rowsForChart = currentPlant ? scopedRows.filter(r => r.plant === currentPlant) : scopedRows;
+                // Rentang tanggal minggu yang sedang ditampilkan (default ke minggu berjalan kalau belum ada data sama sekali)
+                const anchorTanggal = (scopedRows || []).reduce((latest, r) => (!latest || r.tanggal > latest) ? r.tanggal : latest, null);
+                const viewRange = mondaySundayRange(anchorTanggal || new Date());
+                currentViewWeekStart = viewRange.start;
+                currentViewWeekEnd = viewRange.end;
 
-const agg = aggregateBySize(rowsForChart);
-updateStatStrip(agg);
-renderChart(agg);
-renderPlantTable(groupByPlant(scopedRows));
+                if (!isChartEmpty) {
+                    const rowsForChart = currentPlant ? scopedRows.filter(r => r.plant === currentPlant) : scopedRows;
+                    const agg = aggregateBySize(rowsForChart);
+                    updateStatStrip(agg);
+                    renderChart(agg);
+                }
+
+                // Tabel plant SELALU tampil lengkap (semua plant), baik sudah ada data maupun belum
+                renderPlantTable(buildFullPlantMap(scopedRows || []));
+                document.getElementById('tableCard').style.display = 'block';
             } catch (err) {
                 console.error(err);
-                showEmptyState(true);
+                showChartEmptyState(true);
+                document.getElementById('tableCard').style.display = 'none';
             }
         }
 
-        function showEmptyState(isEmpty) {
+        function showChartEmptyState(isEmpty) {
             document.getElementById('emptyState').style.display = isEmpty ? 'block' : 'none';
             document.getElementById('chartWrapper').style.display = isEmpty ? 'none' : 'block';
-            document.getElementById('tableCard').style.display = isEmpty ? 'none' : 'block';
             document.getElementById('statStrip').style.display = isEmpty ? 'none' : 'grid';
         }
 
@@ -605,9 +751,15 @@ renderPlantTable(groupByPlant(scopedRows));
             const tbody = document.getElementById('plantTableBody');
             const plantNames = Object.keys(plantMap).sort();
 
+            if (plantNames.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
+                return;
+            }
+
             tbody.innerHTML = plantNames.map(plant => {
                 const sizes = plantMap[plant];
                 const isExpanded = expandedPlants.has(plant);
+                const detailUrl = `${ROUTES.detailPage}?plant=${encodeURIComponent(plant)}&start=${currentViewWeekStart}&end=${currentViewWeekEnd}`;
 
                 const mainRow = `
                     <tr class="plant-row" onclick="togglePlantRow('${plant.replace(/'/g, "\\'")}')">
@@ -616,12 +768,17 @@ renderPlantTable(groupByPlant(scopedRows));
                             ${plant}
                         </td>
                         ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '-'}</td>`).join('')}
+                        <td onclick="event.stopPropagation();">
+                            <a href="${detailUrl}" class="btn btn-sm btn-outline-primary btn-detail-plant">
+                                <i class="fa-solid fa-magnifying-glass"></i> Detail
+                            </a>
+                        </td>
                     </tr>
                 `;
 
                 const detailRow = isExpanded ? `
                     <tr class="detail-row">
-                        <td colspan="5">
+                        <td colspan="6">
                             <div class="size-breakdown">
                                 ${SIZE_ORDER.map(sz => renderSizeCard(sz, sizes[sz])).join('')}
                             </div>
