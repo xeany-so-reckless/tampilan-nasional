@@ -234,7 +234,7 @@
                         <span class="badge-corner badge-active-neon">Active</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Uniformity Mingguan</h6>
-                            <small class="text-muted">Kelola data keseragaman bobot</small>
+                            <small class="text-muted">Kelola data keseragaman Berat LB</small>
                         </div>
                         <i class="fa-solid fa-chart-pie fs-3 text-primary"></i>
                     </div>
@@ -330,7 +330,7 @@
     <span class="badge-corner badge-coming-soon">Coming Soon</span>
     <div>
         <h6 class="fw-bold mb-1">Summary Nasional</h6>
-        <small class="text-muted">Rekap data ringkasan seluruh region</small>
+        <small class="text-muted">Rekap data ringkasan seluruh Plant</small>
     </div>
     <i class="fa-solid fa-chart-simple fs-3 text-primary"></i>
 </div>
