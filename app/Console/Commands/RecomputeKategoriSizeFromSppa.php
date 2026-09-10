@@ -143,20 +143,20 @@ class RecomputeKategoriSizeFromSppa extends Command
      * Sama persis dengan logic di UniformityController.
      * AK: <1.40 | AM: 1.40-1.80 | AB: 1.81-2.30 | AJ: >=2.31
      */
-    private function hitungKategoriSize(?float $beratKg): ?string
+        private function hitungKategoriSize(?float $beratKg): ?string
     {
         if ($beratKg === null || $beratKg <= 0) {
             return null;
         }
-        if ($beratKg < 1.40) {
+        if ($beratKg <= 1.39) {
             return 'AK';
         }
-        if ($beratKg <= 1.80) {
+        if ($beratKg <= 1.79) {
             return 'AM';
         }
-        if ($beratKg <= 2.30) {
+        if ($beratKg <= 2.19) {
             return 'AB';
         }
-        return 'AJ';
+        return 'AJ'; // 2.20 ke atas, tanpa batas atas
     }
 }

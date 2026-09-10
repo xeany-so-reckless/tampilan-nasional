@@ -436,21 +436,21 @@ class UniformityController extends Controller
      * Hitung kategori size dari berat rata-rata (kolom "Rata-rata RPA", dalam Kg).
      * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: >=2.20
      */
-    private function hitungKategoriSize(?float $beratKg): ?string
+        private function hitungKategoriSize(?float $beratKg): ?string
     {
         if ($beratKg === null || $beratKg <= 0) {
             return null;
         }
-        if ($beratKg < 1.40) {
+        if ($beratKg <= 1.39) {
             return 'AK';
         }
-        if ($beratKg < 1.80) {
+        if ($beratKg <= 1.79) {
             return 'AM';
         }
-        if ($beratKg < 2.20) {
+        if ($beratKg <= 2.19) {
             return 'AB';
         }
-        return 'AJ';
+        return 'AJ'; // 2.20 ke atas, tanpa batas atas
     }
 
     private function weekLabelFromDate(string $tanggal): string
