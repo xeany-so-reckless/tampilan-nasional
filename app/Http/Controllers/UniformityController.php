@@ -132,7 +132,7 @@ class UniformityController extends Controller
                     && ($ekorStandart === null || $ekorStandart == 0)
                     && ($ekorOver === null || $ekorOver == 0);
 
-                if ($rataRpa === null && $semuaEkorKosong) {
+                                if ($rataSppa === null && $semuaEkorKosong) {
                     continue;
                 }
 
@@ -147,13 +147,13 @@ class UniformityController extends Controller
                     continue;
                 }
 
-                // Kategori size DIHITUNG SISTEM dari kolom "Rata-rata RPA", kolom "Kategori Size" di Excel diabaikan
-                $kategoriSize = $this->hitungKategoriSize($rataRpa);
+                                // Kategori size DIHITUNG SISTEM dari kolom "Rata-rata SPPA", kolom "Kategori Size" di Excel diabaikan
+                $kategoriSize = $this->hitungKategoriSize($rataSppa);
 
                 if ($kategoriSize === null) {
                     $dilewati[] = [
                         'baris'  => $row,
-                        'alasan' => 'Kolom "Rata-rata RPA" (G' . $row . ') kosong/tidak valid, kategori size tidak bisa dihitung.',
+                        'alasan' => 'Kolom "Rata-rata SPPA" (F' . $row . ') kosong/tidak valid, kategori size tidak bisa dihitung.',
                     ];
                     continue;
                 }
