@@ -192,6 +192,7 @@
                     <li class="nav-item"><a class="nav-link fw-semibold" href="#" onclick="switchTab('breadcrumb', event)">Bread Crumb</a></li>
                     <li class="nav-item"><a class="nav-link fw-semibold" href="#" onclick="switchTab('retort', event)">Retort Plant</a></li>
                     <li class="nav-item"><a class="nav-link fw-semibold" href="#" onclick="switchTab('warehouse', event)">Warehouse</a></li>
+                    <li class="nav-item"><a class="nav-link fw-semibold" href="#" onclick="switchTab('npcm', event)">NPCM</a></li>
                     <li class="nav-item">
                         <a href="#" class="btn btn-light text-dark fw-bold rounded-pill px-4">Bantuan Sistem</a>
                     </li>
@@ -317,6 +318,22 @@
                         </div>
                         <i class="fa-solid fa-temperature-snowflake fs-3 text-danger"></i>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-npcm" class="content-section">
+            <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-chart-simple"></i> Modul NPCM</h4>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+    <span class="badge-corner badge-coming-soon">Coming Soon</span>
+    <div>
+        <h6 class="fw-bold mb-1">Summary Nasional</h6>
+        <small class="text-muted">Rekap data ringkasan seluruh region</small>
+    </div>
+    <i class="fa-solid fa-chart-simple fs-3 text-primary"></i>
+</div>
                 </div>
             </div>
         </div>
