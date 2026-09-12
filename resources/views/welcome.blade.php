@@ -326,14 +326,15 @@
             <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-chart-simple"></i> Modul NPCM</h4>
             <div class="row g-4">
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
-    <span class="badge-corner badge-coming-soon">Coming Soon</span>
-    <div>
-        <h6 class="fw-bold mb-1">Summary Nasional</h6>
-        <small class="text-muted">Rekap data ringkasan seluruh Plant</small>
-    </div>
-    <i class="fa-solid fa-chart-simple fs-3 text-primary"></i>
-</div>
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+                        onclick="window.location.href='http://10.71.3.28/npcm/monthly-plan'">
+                        <span class="badge-corner badge-active-neon">Active</span>
+                        <div>
+                            <h6 class="fw-bold mb-1">Summary Nasional</h6>
+                            <small class="text-muted">Rekap data ringkasan seluruh Plant</small>
+                        </div>
+                        <i class="fa-solid fa-chart-simple fs-3 text-primary"></i>
+                    </div>
                 </div>
             </div>
         </div>
