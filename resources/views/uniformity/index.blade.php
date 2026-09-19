@@ -145,6 +145,22 @@
         .gap-line.bad { color: #b91c1c; }
 
         .btn-detail-plant { white-space: nowrap; }
+
+        .col-status { width: 100px; white-space: nowrap; text-align: center; }
+
+        /* Badge status upload minggu berjalan, ditampilkan di sebelah nama plant */
+        .plant-badge {
+            display: inline-block;
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .plant-badge.badge-update { background: rgba(22,163,74,.15); color: var(--ok); }
+        .plant-badge.badge-off { background: #e5e7eb; color: #6b7280; }
     </style>
 </head>
 <body>
@@ -237,6 +253,7 @@
                 <thead>
                     <tr>
                         <th>Plant</th>
+                        <th>Status</th>
                         <th>AK</th>
                         <th>AM</th>
                         <th>AB</th>
@@ -255,11 +272,13 @@
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         const ROUTES = {
-            upload: `{{ route('slaughter.uniformity.upload') }}`,
-            data: `{{ route('slaughter.uniformity.data') }}`,
-            filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
-            detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
-        };
+    upload: `{{ route('slaughter.uniformity.upload') }}`,
+    cekKode: `{{ route('slaughter.uniformity.cek-kode') }}`,
+    data: `{{ route('slaughter.uniformity.data') }}`,
+    filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
+    detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
+    uploadStatus: `{{ route('slaughter.uniformity.upload-status') }}`,
+};
 
         let currentRegion = '';
         let currentPlant = '';
@@ -272,6 +291,16 @@
         // Rentang tanggal minggu yang lagi ditampilkan di chart/tabel (dipakai untuk link tombol Detail)
         let currentViewWeekStart = '';
         let currentViewWeekEnd = '';
+        let currentDisplayedWeekLabel = ''; // week_label asli dari data yang sedang tampil di layar
+
+        // Status upload per plant untuk minggu KALENDER berjalan (Senin s/d hari ini),
+        // dipakai untuk badge "UPDATE" / "OFF POTONG" di tabel. Diisi oleh fetchUploadBadges().
+        // Bentuk: { plantName: { uploadedThisWeek: bool, uploadedToday: bool } }
+        let uploadBadgeMap = {};
+
+        // Kode otorisasi yang sudah dikonfirmasi user untuk sesi upload yang sedang berjalan.
+        // Diisi setelah user mengisi modal kode, dipakai saat submit file, lalu dikosongkan lagi.
+        let pendingKodeOtorisasi = '';
 
         const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
         const TARGET_DEFAULT = 0.8;
@@ -296,18 +325,90 @@
             return { start: formatDateYMD(monday), end: formatDateYMD(sunday) };
         }
 
-                function mulaiUploadExcel() {
-            const plant = document.getElementById('uploadPlantSelect').value;
-            const tanggal = document.getElementById('uploadTanggalInput').value;
-
-            if (!plant) {
-                Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
-                return;
-            }
-            
-
-            document.getElementById('excelUploadInput').click();
+        // Nomor ISO week (Senin sbg awal minggu), dibikin supaya konsisten dengan
+        // Carbon::isoWeek() di backend (dipakai buat weekLabelFromDate()).
+        function getISOWeekNumber(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7; // Minggu jadi 7, bukan 0
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
         }
+
+        function currentCalendarWeekLabel() {
+            return 'Week ' + getISOWeekNumber(new Date());
+        }
+
+        // Badge cuma boleh tampil kalau tabel sedang benar-benar menampilkan
+        // minggu kalender berjalan (bukan minggu lama yang dipilih lewat dropdown).
+        function isViewingCurrentCalendarWeek() {
+    return currentDisplayedWeekLabel === currentCalendarWeekLabel();
+}
+
+        // Ambil teks nama plant yang lagi dipilih di dropdown upload, untuk ditampilkan di modal kode.
+        function getSelectedUploadPlantLabel() {
+            const select = document.getElementById('uploadPlantSelect');
+            const opt = select.options[select.selectedIndex];
+            return opt ? opt.innerText : '';
+        }
+
+        async function mulaiUploadExcel() {
+    const plant = document.getElementById('uploadPlantSelect').value;
+
+    if (!plant) {
+        Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
+        return;
+    }
+
+    const plantLabel = getSelectedUploadPlantLabel();
+
+    const { value: kode, isConfirmed } = await Swal.fire({
+        title: `Masukkan kode otorisasi Plant ${plantLabel}`,
+        input: 'text',
+        inputPlaceholder: 'Kode otorisasi',
+        inputAttributes: { autocapitalize: 'off', autocomplete: 'off' },
+        showCancelButton: true,
+        confirmButtonText: 'Lanjut Upload',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#16a34a',
+        showLoaderOnConfirm: true,
+        inputValidator: (value) => {
+            if (!value || !value.trim()) {
+                return 'Kode otorisasi wajib diisi.';
+            }
+        },
+        preConfirm: async (value) => {
+            // Cek kode ke server DULU, sebelum modal ditutup dan file picker dibuka
+            try {
+                const res = await fetch(ROUTES.cekKode, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ plant, kode_otorisasi: value.trim() }),
+                });
+                const result = await res.json();
+                if (!res.ok) {
+                    Swal.showValidationMessage(result.message || 'Kode otorisasi tidak sesuai.');
+                    return false;
+                }
+                return value.trim();
+            } catch (err) {
+                Swal.showValidationMessage('Gagal menghubungi server, coba lagi.');
+                return false;
+            }
+        },
+        allowOutsideClick: () => !Swal.isLoading(),
+    });
+
+    if (!isConfirmed) {
+        return; // user batal, atau kode salah (preConfirm return false)
+    }
+
+    pendingKodeOtorisasi = kode;
+    document.getElementById('excelUploadInput').click();
+}
 
                 async function handleExcelUpload(input) {
             const file = input.files[0];
@@ -315,9 +416,16 @@
 
             const plant = document.getElementById('uploadPlantSelect').value;
             const tanggal = document.getElementById('uploadTanggalInput').value;
+            const kodeOtorisasi = pendingKodeOtorisasi;
 
                         if (!plant) {
                 Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
+                input.value = '';
+                return;
+            }
+
+            if (!kodeOtorisasi) {
+                Swal.fire({ title: 'Belum lengkap', text: 'Kode otorisasi belum diisi. Silakan klik Upload Excel lagi.', icon: 'warning' });
                 input.value = '';
                 return;
             }
@@ -326,6 +434,7 @@
             formData.append('file', file);
             formData.append('plant', plant);
             formData.append('tanggal', tanggal);
+            formData.append('kode_otorisasi', kodeOtorisasi);
 
             Swal.fire({
                 title: 'Memproses Excel...',
@@ -363,10 +472,12 @@
 
                 await loadFilterOptions();
                 await refreshView();
+                await fetchUploadBadges();
             } catch (err) {
                 Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
             } finally {
                 input.value = '';
+                pendingKodeOtorisasi = ''; // kode sekali pakai per percobaan upload, jangan disimpan lebih lama
             }
         }
 
@@ -461,6 +572,7 @@ function populateWeekDropdown(weeks) {
 function setWeek(week) {
     currentWeek = week;
     refreshView();
+    renderPlantTable(currentFullPlantMapCache || {});
 }
 
         function setRegion(region, btnEl) {
@@ -588,6 +700,10 @@ function setWeek(week) {
             return fullMap;
         }
 
+        // Cache map plant terakhir yang dipakai renderPlantTable(), supaya setWeek() bisa
+        // re-render badge tanpa harus nunggu ulang fetch data chart/tabel.
+        let currentFullPlantMapCache = {};
+
         async function refreshView() {
             updateChartTitle();
             const qs = buildQuery();
@@ -607,6 +723,7 @@ function setWeek(week) {
                 document.getElementById('infoWeek').innerText = (!isChartEmpty && scopedRows[0]?.week_label)
                     ? `Data minggu: ${scopedRows[0].week_label}`
                     : '';
+                currentDisplayedWeekLabel = (!isChartEmpty && scopedRows[0]?.week_label) ? scopedRows[0].week_label : '';
 
                 // Rentang tanggal minggu yang sedang ditampilkan (default ke minggu berjalan kalau belum ada data sama sekali)
                 const anchorTanggal = (scopedRows || []).reduce((latest, r) => (!latest || r.tanggal > latest) ? r.tanggal : latest, null);
@@ -622,7 +739,8 @@ function setWeek(week) {
                 }
 
                 // Tabel plant SELALU tampil lengkap (semua plant), baik sudah ada data maupun belum
-                renderPlantTable(buildFullPlantMap(scopedRows || []));
+                currentFullPlantMapCache = buildFullPlantMap(scopedRows || []);
+                renderPlantTable(currentFullPlantMapCache);
                 document.getElementById('tableCard').style.display = 'block';
             } catch (err) {
                 console.error(err);
@@ -747,12 +865,30 @@ function setWeek(week) {
             return `<span class="pct-chip ${cls}">${pct}%</span>`;
         }
 
+        // Bikin HTML badge kecil di sebelah nama plant, berdasarkan uploadBadgeMap.
+        // Return string kosong kalau tidak perlu badge (sudah upload minggu ini tapi bukan hari ini,
+        // atau sedang tidak melihat minggu kalender berjalan).
+        function plantBadgeHtml(plant) {
+            if (!isViewingCurrentCalendarWeek()) return '';
+
+            const status = uploadBadgeMap[plant];
+            if (!status) return ''; // data badge belum ada/gagal load -> jangan tampilkan apa-apa
+
+            if (!status.uploadedThisWeek) {
+                return `<span class="plant-badge badge-off">OFF POTONG</span>`;
+            }
+            if (status.uploadedToday) {
+                return `<span class="plant-badge badge-update">UPDATE</span>`;
+            }
+            return '';
+        }
+
         function renderPlantTable(plantMap) {
             const tbody = document.getElementById('plantTableBody');
             const plantNames = Object.keys(plantMap).sort();
 
             if (plantNames.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
                 return;
             }
 
@@ -764,10 +900,11 @@ function setWeek(week) {
                 const mainRow = `
                     <tr class="plant-row" onclick="togglePlantRow('${plant.replace(/'/g, "\\'")}')">
                         <td>
-                            <i class="fa-solid fa-chevron-down expand-icon ${isExpanded ? 'open' : ''}"></i>
-                            ${plant}
-                        </td>
-                        ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '-'}</td>`).join('')}
+    <i class="fa-solid fa-chevron-down expand-icon ${isExpanded ? 'open' : ''}"></i>
+    ${plant}
+</td>
+<td class="col-status">${plantBadgeHtml(plant)}</td>
+${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '-'}</td>`).join('')}
                         <td onclick="event.stopPropagation();">
                             <a href="${detailUrl}" class="btn btn-sm btn-outline-primary btn-detail-plant">
                                 <i class="fa-solid fa-magnifying-glass"></i> Detail
@@ -778,7 +915,7 @@ function setWeek(week) {
 
                 const detailRow = isExpanded ? `
                     <tr class="detail-row">
-                        <td colspan="6">
+                        <td colspan="7">
                             <div class="size-breakdown">
                                 ${SIZE_ORDER.map(sz => renderSizeCard(sz, sizes[sz])).join('')}
                             </div>
@@ -826,9 +963,42 @@ function setWeek(week) {
             refreshView();
         }
 
+        // Ambil status upload minggu kalender berjalan (Senin s/d hari ini) untuk semua plant,
+        // lalu simpan ringkasannya ke uploadBadgeMap supaya renderPlantTable() bisa pasang badge.
+        // Dipanggil terpisah dari refreshView() karena basisnya minggu kalender asli,
+        // bukan minggu yang sedang difilter user (currentWeek/currentViewWeekStart-End).
+        async function fetchUploadBadges() {
+            const today = new Date();
+            const range = mondaySundayRange(today);
+            const todayStr = formatDateYMD(today);
+
+            try {
+                const res = await fetch(`${ROUTES.uploadStatus}?start=${range.start}&end=${range.end}`);
+                const data = await res.json(); // { region: [ { plant, tanggal: [{tanggal, sudah_upload}] } ] }
+
+                const map = {};
+                Object.values(data).forEach(plantList => {
+                    plantList.forEach(p => {
+                        const uploadedThisWeek = p.tanggal.some(t => t.sudah_upload);
+                        const uploadedToday = p.tanggal.some(t => t.tanggal === todayStr && t.sudah_upload);
+                        map[p.plant] = { uploadedThisWeek, uploadedToday };
+                    });
+                });
+
+                uploadBadgeMap = map;
+            } catch (err) {
+                console.error('Gagal ambil status upload untuk badge:', err);
+                uploadBadgeMap = {};
+            }
+
+            // Re-render tabel yang sudah ada di layar supaya badge langsung update
+            renderPlantTable(currentFullPlantMapCache);
+        }
+
         (async function init() {
             await loadFilterOptions();
             await refreshView();
+            await fetchUploadBadges();
         })();
     </script>
 

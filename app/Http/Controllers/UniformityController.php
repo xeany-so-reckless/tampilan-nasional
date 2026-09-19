@@ -7,6 +7,7 @@ use App\Models\UniformityReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class UniformityController extends Controller
@@ -55,6 +56,46 @@ class UniformityController extends Controller
         ];
     }
 
+    /**
+     * Kode otorisasi per plant. Disimpan di server (bukan di JS/frontend) supaya
+     * tidak bisa dilihat langsung oleh user lewat Inspect Element / View Source.
+     *
+     * Pola: singkatan plant + 4 karakter acak (huruf/angka yang gampang tertukar
+     * seperti 0/O dan 1/I sengaja dihindari). Kode acak begini lebih susah ditebak
+     * dibanding pola berurutan (misal 01, 02, dst).
+     */
+    private function plantCodes(): array
+    {
+        return [
+            'Cikande 1'   => 'CKD-LXLS',
+            'Cikande 3'   => 'CKD-3AL4',
+            'Lebak'       => 'LBK-UQME',
+
+            'Bandung'     => 'BDG-MJ4K',
+            'Majalengka'  => 'MJL-9AXU',
+            'Subang'      => 'SBG-A9D4',
+
+            'Salatiga 1'  => 'SLT-8HY9',
+            'Salatiga 2'  => 'SLT-QHJ6',
+            'Sragen'      => 'SRG-KLUD',
+            'Banyumas'    => 'BYM-7BHB',
+            'Pemalang'    => 'PML-QUND',
+            'Kebumen'     => 'KBM-S9D7',
+
+            'Ngoro'       => 'NGR-KYCQ',
+            'Madiun'      => 'MDN-SSMC',
+            'Bondowoso'   => 'BDW-2NY2',
+            'Jombang'     => 'JBG-A3DU',
+
+            'Medan'       => 'MED-R6YJ',
+            'Palembang'   => 'PLB-4QNU',
+            'Bali'        => 'BLI-JF7B',
+            'Banjar Baru' => 'BJB-UM5M',
+            'Balikpapan'  => 'BLP-Z2FL',
+            'Makassar'    => 'MKS-R2PY',
+        ];
+    }
+
     public function index()
     {
         return view('uniformity.index');
@@ -66,16 +107,91 @@ class UniformityController extends Controller
     }
 
     /**
+     * Endpoint khusus buat cek kode otorisasi SEBELUM user pilih file di file picker.
+     * Dipanggil dari modal SweetAlert di frontend supaya user langsung tahu kalau
+     * kodenya salah, tanpa harus pilih file dulu.
+     *
+     * PENTING: ini cuma untuk UX (feedback lebih cepat). Endpoint /upload TETAP
+     * validasi kode ini lagi dari awal secara independen - jadi walaupun endpoint
+     * ini "dilewati"/dipanggil manual dengan kode asal-asalan, upload tetap akan
+     * ditolak di server kalau kodenya salah.
+     */
+    public function cekKode(Request $request)
+    {
+        $request->validate([
+            'plant'          => 'required|string',
+            'kode_otorisasi' => 'required|string',
+        ]);
+
+        $plantInfo = $this->cariPlantDiMap($request->input('plant'));
+        if (!$plantInfo) {
+            return response()->json([
+                'message' => 'Plant "' . $request->input('plant') . '" tidak ditemukan di daftar plant.',
+            ], 422);
+        }
+
+        $errorOtorisasi = $this->cekOtorisasiPlant($request, $plantInfo['plant']);
+        if ($errorOtorisasi) {
+            return response()->json(['message' => $errorOtorisasi['message']], $errorOtorisasi['status']);
+        }
+
+        return response()->json(['message' => 'Kode otorisasi valid.']);
+    }
+
+    /**
+     * Cek kode otorisasi untuk sebuah plant, termasuk rate limiting percobaan gagal.
+     * Dipakai bareng oleh cekKode() (endpoint pre-check) dan upload() (endpoint asli),
+     * supaya logikanya tidak dobel dan konsisten di kedua tempat.
+     *
+     * Return null kalau kode valid. Return array ['status' => int, 'message' => string]
+     * kalau tidak valid (dipakai controller pemanggil untuk bikin response error).
+     */
+    private function cekOtorisasiPlant(Request $request, string $plant): ?array
+    {
+        $rateLimitKey = 'upload-kode-otorisasi:' . $plant . ':' . $request->ip();
+
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {
+            $detikTunggu = RateLimiter::availableIn($rateLimitKey);
+            return [
+                'status'  => 429,
+                'message' => 'Terlalu banyak percobaan kode yang salah untuk plant ini. Coba lagi dalam ' . ceil($detikTunggu / 60) . ' menit.',
+            ];
+        }
+
+        $kodeValidPlant = $this->plantCodes()[$plant] ?? null;
+        $kodeInput      = trim((string) $request->input('kode_otorisasi'));
+
+        if ($kodeValidPlant === null || !hash_equals($kodeValidPlant, $kodeInput)) {
+            RateLimiter::hit($rateLimitKey, 900); // lock 15 menit setelah 5x gagal
+            return [
+                'status'  => 403,
+                'message' => 'Kode otorisasi tidak sesuai untuk plant ini.',
+            ];
+        }
+
+        // Kode benar -> reset counter rate limit untuk plant ini
+        RateLimiter::clear($rateLimitKey);
+
+        return null;
+    }
+    
+    /**
      * Upload & parsing file Excel. 1 file = 1 plant, bisa 1 hari atau banyak hari.
      * - Kalau user isi tanggal manual: semua baris pakai tanggal itu, kolom B diabaikan.
      * - Kalau tanggal dikosongkan: tanggal dibaca PER BARIS dari kolom B Excel.
+     *
+     * Sebelum file diproses, kode otorisasi yang dikirim dicocokkan dulu dengan
+     * kode milik plant yang dipilih. Kalau tidak cocok, proses dihentikan di sini
+     * dan file Excel tidak pernah dibaca/disimpan. Ini validasi independen dari
+     * cekKode() - dijalankan ulang dari awal, bukan mempercayai hasil cekKode().
      */
     public function upload(Request $request)
     {
         $request->validate([
-            'file'    => 'required|mimes:xlsx,xls',
-            'plant'   => 'required|string',
-            'tanggal' => 'nullable|date',
+            'file'           => 'required|mimes:xlsx,xls',
+            'plant'          => 'required|string',
+            'tanggal'        => 'nullable|date',
+            'kode_otorisasi' => 'required|string',
         ]);
 
         $plantInfo = $this->cariPlantDiMap($request->input('plant'));
@@ -87,6 +203,11 @@ class UniformityController extends Controller
 
         $region  = $plantInfo['region'];
         $plant   = $plantInfo['plant'];
+
+        $errorOtorisasi = $this->cekOtorisasiPlant($request, $plant);
+        if ($errorOtorisasi) {
+            return response()->json(['message' => $errorOtorisasi['message']], $errorOtorisasi['status']);
+        }
 
         // Kalau user isi tanggal manual, semua baris pakai tanggal itu (kolom B Excel diabaikan).
         // Kalau kosong, tanggal dibaca PER BARIS dari kolom B Excel (1 file bisa punya banyak tanggal).

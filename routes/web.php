@@ -20,6 +20,9 @@ Route::prefix('slaughter/uniformity')->name('slaughter.uniformity.')->group(func
     // Upload file Excel (1 file = 1 plant = 1 hari, replace data plant+tanggal itu)
     Route::post('/upload', [UniformityController::class, 'upload'])->name('upload');
 
+    // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
+Route::post('/cek-kode', [UniformityController::class, 'cekKode'])->name('cek-kode');
+
     // Ambil data agregat untuk chart (bisa difilter ?week=...&region=...&plant=...)
     Route::get('/data', [UniformityController::class, 'data'])->name('data');
 
