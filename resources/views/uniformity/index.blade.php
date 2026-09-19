@@ -159,8 +159,31 @@
             margin-left: 8px;
             vertical-align: middle;
         }
-        .plant-badge.badge-update { background: rgba(22,163,74,.15); color: var(--ok); }
         .plant-badge.badge-off { background: #e5e7eb; color: #6b7280; }
+
+        /* Badge UPDATE: glow neon hijau berdenyut pelan */
+        .plant-badge.badge-update {
+            background: rgba(22,163,74,.15);
+            color: var(--ok);
+            animation: neonPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes neonPulse {
+            0%, 100% {
+                box-shadow: 0 0 2px rgba(22,163,74,.35), 0 0 4px rgba(22,163,74,.2);
+                text-shadow: none;
+            }
+            50% {
+                box-shadow: 0 0 6px #16a34a, 0 0 12px rgba(22,163,74,.7), 0 0 20px rgba(22,163,74,.4);
+                text-shadow: 0 0 6px rgba(22,163,74,.8);
+            }
+        }
+        /* Matikan animasi untuk pengguna yang memilih mengurangi gerakan */
+        @media (prefers-reduced-motion: reduce) {
+            .plant-badge.badge-update {
+                animation: none;
+                box-shadow: 0 0 6px rgba(22,163,74,.6);
+            }
+        }
     </style>
 </head>
 <body>
@@ -305,6 +328,9 @@
         const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
         const TARGET_DEFAULT = 0.8;
         const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
+
+        // Durasi satu siklus denyut glow badge UPDATE (detik) - harus sama dengan di CSS (neonPulse)
+        const BADGE_PULSE_SECONDS = 1.8;
 
         function formatDateYMD(d) {
             const y = d.getFullYear();
@@ -556,7 +582,6 @@
             });
         }
 
-// TAMBAHKAN FUNGSI INI
 function populateWeekDropdown(weeks) {
     const select = document.getElementById('weekSelect');
     select.innerHTML = `<option value="">-- Minggu Terbaru --</option>`;
@@ -568,7 +593,6 @@ function populateWeekDropdown(weeks) {
     });
 }
 
-// TAMBAHKAN FUNGSI INI
 function setWeek(week) {
     currentWeek = week;
     refreshView();
@@ -878,7 +902,10 @@ function setWeek(week) {
                 return `<span class="plant-badge badge-off">OFF POTONG</span>`;
             }
             if (status.uploadedToday) {
-                return `<span class="plant-badge badge-update">UPDATE</span>`;
+                // Delay negatif berdasarkan waktu halaman, supaya denyut glow tetap nyambung
+                // (tidak mulai dari awal) setiap kali tabel dirender ulang.
+                const delay = -((performance.now() / 1000) % BADGE_PULSE_SECONDS).toFixed(2);
+                return `<span class="plant-badge badge-update" style="animation-delay:${delay}s;">UPDATE</span>`;
             }
             return '';
         }
