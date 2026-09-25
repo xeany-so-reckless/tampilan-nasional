@@ -178,7 +178,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark navbar-custom py-3">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <img src="{{ asset('images/logo.jpg') }}" alt="Logo" style="height: 50px;">
+                <img src="{{ asset('images/logo.png') }}" alt="Logo" style="height: 50px;">
             </a>
 
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -259,6 +259,17 @@
                         <i class="fa-solid fa-truck-fast fs-3 text-warning"></i>
                     </div>
                 </div>
+                {{-- <div class="col-md-4">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+                        onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
+                        <span class="badge-corner badge-active-neon">Active</span>
+                        <div>
+                            <h6 class="fw-bold mb-1">Rekap ATU</h6>
+                            <small class="text-muted">Kelola ATU</small>
+                        </div>
+                        <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
+                    </div>
+                </div> --}}
             </div>
         </div>
 
