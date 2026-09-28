@@ -174,7 +174,7 @@ class UniformityController extends Controller
 
         return null;
     }
-    
+
     /**
      * Upload & parsing file Excel. 1 file = 1 plant, bisa 1 hari atau banyak hari.
      * - Kalau user isi tanggal manual: semua baris pakai tanggal itu, kolom B diabaikan.
@@ -253,7 +253,7 @@ class UniformityController extends Controller
                     && ($ekorStandart === null || $ekorStandart == 0)
                     && ($ekorOver === null || $ekorOver == 0);
 
-                                if ($rataSppa === null && $semuaEkorKosong) {
+                if ($rataSppa === null && $semuaEkorKosong) {
                     continue;
                 }
 
@@ -268,7 +268,7 @@ class UniformityController extends Controller
                     continue;
                 }
 
-                                // Kategori size DIHITUNG SISTEM dari kolom "Rata-rata SPPA", kolom "Kategori Size" di Excel diabaikan
+                // Kategori size DIHITUNG SISTEM dari kolom "Rata-rata SPPA", kolom "Kategori Size" di Excel diabaikan
                 $kategoriSize = $this->hitungKategoriSize($rataSppa);
 
                 if ($kategoriSize === null) {
@@ -408,6 +408,98 @@ class UniformityController extends Controller
         return response()->json($query->get());
     }
 
+    /**
+     * Perbandingan data 1 plant antara 2 bulan kalender (dipakai fitur "Perbandingan Bulan").
+     * Sengaja dibikin endpoint terpisah dari data() karena filternya berbasis rentang
+     * tanggal (whereBetween awal-akhir bulan), bukan week_label - week_label bisa nyebrang
+     * bulan jadi tidak bisa dipakai buat agregasi per bulan kalender secara akurat.
+     */
+    public function compareBulan(Request $request)
+    {
+        $request->validate([
+            'plant'   => 'required|string',
+            'bulan'   => 'required|array|min:2|max:2',
+            'bulan.*' => 'required|date_format:Y-m',
+        ]);
+
+        $plantInfo = $this->cariPlantDiMap($request->input('plant'));
+        if (!$plantInfo) {
+            return response()->json([
+                'message' => 'Plant "' . $request->input('plant') . '" tidak ditemukan di daftar plant.',
+            ], 422);
+        }
+        $plant = $plantInfo['plant'];
+
+        $hasil = [];
+
+        foreach ($request->input('bulan') as $ym) {
+            $awal  = Carbon::createFromFormat('Y-m-d', $ym . '-01')->startOfMonth();
+            $akhir = $awal->copy()->endOfMonth();
+
+            $agg = $this->agregasiRentang($plant, $awal, $akhir);
+
+            $hasil[] = [
+                'bulan'    => $ym, // format Y-m, misal "2026-08"
+                'label'    => $this->namaBulanIndonesia((int) $awal->format('n')) . ' ' . $awal->format('Y'),
+                'ada_data' => $agg['ada_data'],
+                'sizes'    => $agg['sizes'],
+            ];
+        }
+
+        return response()->json([
+            'plant'  => $plant,
+            'region' => $plantInfo['region'],
+            'bulan'  => $hasil,
+        ]);
+    }
+
+    /**
+     * Tren 1 plant sepanjang 12 bulan dalam 1 tahun kalender (fitur "Tren Setahun").
+     * Selalu mengembalikan 12 bulan (Januari-Desember). Bulan tanpa data punya
+     * ada_data = false dan total_lb = 0 di semua size, supaya frontend bisa
+     * menggambarnya sebagai celah (null), bukan 0%.
+     */
+    public function compareTahun(Request $request)
+    {
+        $request->validate([
+            'plant' => 'required|string',
+            'tahun' => 'required|integer|digits:4|between:2000,2100',
+        ]);
+
+        $plantInfo = $this->cariPlantDiMap($request->input('plant'));
+        if (!$plantInfo) {
+            return response()->json([
+                'message' => 'Plant "' . $request->input('plant') . '" tidak ditemukan di daftar plant.',
+            ], 422);
+        }
+        $plant = $plantInfo['plant'];
+        $tahun = (int) $request->input('tahun');
+
+        $bulanOut = [];
+
+        for ($m = 1; $m <= 12; $m++) {
+            $awal  = Carbon::create($tahun, $m, 1)->startOfMonth();
+            $akhir = $awal->copy()->endOfMonth();
+
+            $agg = $this->agregasiRentang($plant, $awal, $akhir);
+
+            $bulanOut[] = [
+                'bulan'    => $awal->format('Y-m'),
+                'nomor'    => $m,
+                'label'    => $this->namaBulanIndonesia($m),
+                'ada_data' => $agg['ada_data'],
+                'sizes'    => $agg['sizes'],
+            ];
+        }
+
+        return response()->json([
+            'plant'  => $plant,
+            'region' => $plantInfo['region'],
+            'tahun'  => $tahun,
+            'bulan'  => $bulanOut,
+        ]);
+    }
+
     public function filterOptions()
     {
         $rows = UniformityReport::select('region', 'plant')->distinct()->get();
@@ -432,11 +524,39 @@ class UniformityController extends Controller
             $semuaPlant[$region] = array_column($plants, 'plant');
         }
 
+        // Daftar bulan (Y-m) yang punya data, buat dropdown Perbandingan Bulan di frontend
+        $tanggalList = UniformityReport::select('tanggal')->distinct()->pluck('tanggal');
+
+        $monthsSet = [];
+        foreach ($tanggalList as $t) {
+            $ym = Carbon::parse($t)->format('Y-m');
+            $monthsSet[$ym] = true;
+        }
+        $monthKeys = array_keys($monthsSet);
+        rsort($monthKeys); // terbaru duluan
+
+        $monthsOut = array_map(function ($ym) {
+            $tgl = Carbon::createFromFormat('Y-m-d', $ym . '-01');
+            return [
+                'value' => $ym,
+                'label' => $this->namaBulanIndonesia((int) $tgl->format('n')) . ' ' . $tgl->format('Y'),
+            ];
+        }, $monthKeys);
+
+        // Daftar tahun yang punya data, buat dropdown Tren Setahun di frontend (terbaru duluan)
+        $yearsOut = array_values(array_unique(array_map(
+            fn ($ym) => (int) substr($ym, 0, 4),
+            $monthKeys
+        )));
+        rsort($yearsOut);
+
         return response()->json([
             'regions'              => array_keys($grouped),
             'plants_by_region'     => $grouped,
             'weeks'                => $weeks,
             'all_plants_by_region' => $semuaPlant,
+            'months'               => $monthsOut,
+            'years'                => $yearsOut, // contoh: [2026]
         ]);
     }
 
@@ -508,6 +628,52 @@ class UniformityController extends Controller
         return response()->json($rows);
     }
 
+    /**
+     * Agregasi data uniformity 1 plant pada rentang tanggal tertentu, per size.
+     * Dipakai bersama oleh compareBulan() dan compareTahun() supaya logikanya tidak dobel.
+     * Persentase dihitung dari total yang dijumlahkan (weighted), bukan rata-rata persen harian.
+     */
+    private function agregasiRentang(string $plant, Carbon $awal, Carbon $akhir): array
+    {
+        $rows = UniformityReport::where('plant', $plant)
+            ->whereBetween('tanggal', [$awal->format('Y-m-d'), $akhir->format('Y-m-d')])
+            ->get();
+
+        $agregat = [];
+        foreach ($this->sizeOrder as $size) {
+            $agregat[$size] = ['total_lb' => 0, 'lb_standart' => 0, 'lb_under' => 0, 'lb_over' => 0, 'target' => 0.8];
+        }
+
+        foreach ($rows as $r) {
+            if (!isset($agregat[$r->size])) {
+                continue;
+            }
+            $agregat[$r->size]['total_lb']    += $r->total_lb;
+            $agregat[$r->size]['lb_standart'] += $r->lb_standart;
+            $agregat[$r->size]['lb_under']    += $r->lb_under;
+            $agregat[$r->size]['lb_over']     += $r->lb_over;
+            $agregat[$r->size]['target']      = (float) $r->target;
+        }
+
+        $sizesOut = [];
+        foreach ($this->sizeOrder as $size) {
+            $a     = $agregat[$size];
+            $total = $a['total_lb'];
+            $sizesOut[$size] = [
+                'total_lb'        => $total,
+                'persen_standart' => $total > 0 ? $a['lb_standart'] / $total : 0,
+                'persen_under'    => $total > 0 ? $a['lb_under'] / $total : 0,
+                'persen_over'     => $total > 0 ? $a['lb_over'] / $total : 0,
+                'target'          => $a['target'],
+            ];
+        }
+
+        return [
+            'ada_data' => $rows->count() > 0,
+            'sizes'    => $sizesOut,
+        ];
+    }
+
     private function cariPlantDiMap(string $plantName): ?array
     {
         foreach ($this->plantMap() as $region => $plants) {
@@ -553,11 +719,11 @@ class UniformityController extends Controller
         }
     }
 
-        /**
-     * Hitung kategori size dari berat rata-rata (kolom "Rata-rata RPA", dalam Kg).
+    /**
+     * Hitung kategori size dari berat rata-rata (kolom "Rata-rata SPPA", dalam Kg).
      * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: >=2.20
      */
-        private function hitungKategoriSize(?float $beratKg): ?string
+    private function hitungKategoriSize(?float $beratKg): ?string
     {
         if ($beratKg === null || $beratKg <= 0) {
             return null;
@@ -578,6 +744,16 @@ class UniformityController extends Controller
     {
         $date = Carbon::parse($tanggal);
         return 'Week ' . $date->isoWeek();
+    }
+
+    private function namaBulanIndonesia(int $bulan): string
+    {
+        $nama = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+        return $nama[$bulan] ?? (string) $bulan;
     }
 
     private function strOrNull($value)

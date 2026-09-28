@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UniformityController;
+use App\Http\Controllers\AtuController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -21,10 +22,16 @@ Route::prefix('slaughter/uniformity')->name('slaughter.uniformity.')->group(func
     Route::post('/upload', [UniformityController::class, 'upload'])->name('upload');
 
     // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
-Route::post('/cek-kode', [UniformityController::class, 'cekKode'])->name('cek-kode');
+    Route::post('/cek-kode', [UniformityController::class, 'cekKode'])->name('cek-kode');
 
     // Ambil data agregat untuk chart (bisa difilter ?week=...&region=...&plant=...)
     Route::get('/data', [UniformityController::class, 'data'])->name('data');
+
+    // Perbandingan data 1 plant antara 2 bulan kalender (?plant=...&bulan[]=Y-m&bulan[]=Y-m)
+    Route::get('/compare-bulan', [UniformityController::class, 'compareBulan'])->name('compare-bulan');
+
+        // Tren 1 plant sepanjang 12 bulan dalam 1 tahun (?plant=...&tahun=YYYY)
+    Route::get('/compare-tahun', [UniformityController::class, 'compareTahun'])->name('compare-tahun');
 
     // Ambil daftar region & plant untuk isi dropdown filter + upload
     Route::get('/filter-options', [UniformityController::class, 'filterOptions'])->name('filter-options');
@@ -35,3 +42,23 @@ Route::post('/cek-kode', [UniformityController::class, 'cekKode'])->name('cek-ko
     // Data mentah per rit untuk halaman Detail (?plant=...&start=...&end=...&kategori_size[]=...)
     Route::get('/detail', [UniformityController::class, 'detail'])->name('detail');
 });
+
+// // ==========================================================
+// // Slaughter House - Rekap ATU Bulanan
+// // ==========================================================
+// Route::prefix('slaughter/atu')->name('slaughter.atu.')->group(function () {
+//     // Halaman utama (blade view)
+//     Route::get('/', [AtuController::class, 'index'])->name('index');
+ 
+//     // Upload file Excel (1 file = 1 plant = 1 minggu, replace data plant+minggu itu)
+//     Route::post('/upload', [AtuController::class, 'upload'])->name('upload');
+ 
+//     // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
+//     Route::post('/cek-kode', [AtuController::class, 'cekKode'])->name('cek-kode');
+ 
+//     // Ambil data agregat untuk chart & tabel (bisa difilter ?bulan=...&tahun=...&region=...&plant=...)
+//     Route::get('/data', [AtuController::class, 'data'])->name('data');
+ 
+//     // Ambil daftar region & plant untuk isi dropdown filter + upload, plus daftar bulan yang ada datanya
+//     Route::get('/filter-options', [AtuController::class, 'filterOptions'])->name('filter-options');
+// });

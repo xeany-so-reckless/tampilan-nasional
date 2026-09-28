@@ -83,10 +83,76 @@
         .btn-upload { background: #16a34a; border-color: #16a34a; }
         .btn-upload:hover { background: #15803d; border-color: #15803d; }
 
+        .btn-compare {
+            background: #fff;
+            border: 1px solid #0a9396;
+            color: #0a9396;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            white-space: nowrap;
+        }
+        .btn-compare:hover { background: #0a9396; color: #fff; }
+
         .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
         .empty-state i { font-size: 3rem; margin-bottom: 14px; display: block; color: #c3cdd6; }
 
         .info-week { font-size: 0.85rem; color: #556; }
+
+        /* Banner mode Perbandingan Bulan / Tren Setahun */
+        .comparison-banner {
+            background: linear-gradient(135deg, #0a9396, #005f73);
+            color: #fff;
+            border-radius: 10px;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            flex-wrap: wrap;
+        }
+        .comparison-banner .btn-exit-compare {
+            background: rgba(255,255,255,.15);
+            border: 1px solid rgba(255,255,255,.5);
+            color: #fff;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            padding: 5px 12px;
+            white-space: nowrap;
+        }
+        .comparison-banner .btn-exit-compare:hover { background: rgba(255,255,255,.3); }
+
+        /* Sembunyikan kolom Status & Aksi di tabel saat mode Perbandingan Bulan / Tren Setahun aktif,
+           karena kolom itu maknanya spesifik minggu berjalan / detail per-minggu,
+           tidak relevan saat menampilkan agregat bulanan. */
+        .table-card.compare-active .col-status,
+        .table-card.compare-active .col-aksi { display: none; }
+
+        /* Filter normal (region/plant/week) di-nonaktifkan visual saat mode Perbandingan aktif */
+        .filters-disabled { pointer-events: none; opacity: 0.5; }
+
+        /* Tombol pilih size (Semua / AK / AM / AB / AJ) di atas chart mode Tren Setahun */
+        .size-toggle {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+        .size-toggle button {
+            border: 1px solid #0a9396;
+            color: #0a9396;
+            background: #fff;
+            border-radius: 16px;
+            padding: 4px 14px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .size-toggle button:hover { background: #e6f6f6; }
+        .size-toggle button.active { background: #0a9396; color: #fff; }
 
         /* Table */
         table.uniformity-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -105,6 +171,8 @@
         table.uniformity-table tbody td:first-child { text-align: left; font-weight: 600; }
         .plant-row { cursor: pointer; }
         .plant-row:hover { background: #f8fafc; }
+        /* Baris bulan di Tren Setahun: tidak bisa diklik, dibuat sedikit berwarna supaya tiap bulan mudah dibedakan saat scroll */
+        .month-row td { background: #eef6f6; }
 
         .pct-chip {
             display: inline-block;
@@ -143,6 +211,26 @@
         .size-card .gap-line { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); font-size: 0.75rem; font-weight: 700; }
         .gap-line.ok { color: var(--ok); }
         .gap-line.bad { color: #b91c1c; }
+
+        /* Ikon tren naik/turun/tetap di size-card mode Perbandingan Bulan */
+        .trend-arrow {
+            font-size: 0.7rem;
+            margin-left: 5px;
+        }
+        .trend-arrow.good { color: #16a34a; }
+        .trend-arrow.bad { color: #b91c1c; }
+        .trend-arrow.flat { color: var(--muted); }
+
+        /* Grup 1 size di dalam mode Perbandingan Bulan (judul size + 2 size-card berdampingan) */
+        .compare-size-group { margin-bottom: 4px; }
+        .compare-size-group .compare-size-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
 
         .btn-detail-plant { white-space: nowrap; }
 
@@ -198,6 +286,13 @@
 
     <div class="container my-4">
 
+        <div id="comparisonBanner" class="comparison-banner" style="display:none;">
+            <span id="comparisonBannerText"><i class="fa-solid fa-code-compare"></i></span>
+            <button class="btn-exit-compare" onclick="keluarModePerbandingan()">
+                <i class="fa-solid fa-xmark"></i> Kembali ke Tampilan Mingguan
+            </button>
+        </div>
+
         <div class="stat-strip" id="statStrip">
             <div class="stat-box" id="statBoxAK">
                 <div class="stat-label">% LB Standart AK</div>
@@ -232,12 +327,18 @@
                             <option value="">-- Semua Plant --</option>
                         </select>
                         <select id="weekSelect" class="form-select form-select-sm" style="max-width:200px; display:inline-block; margin-left:8px;" onchange="setWeek(this.value)">
-                    <option value="">-- Minggu Terbaru --</option>
-                </select>
+                            <option value="">-- Minggu Terbaru --</option>
+                        </select>
+                        <button type="button" class="btn-compare ms-2" onclick="bukaModalPerbandinganBulan()">
+                            <i class="fa-solid fa-code-compare"></i> Perbandingan Bulan
+                        </button>
+                        <button type="button" class="btn-compare ms-2" onclick="bukaModalTrenSetahun()">
+                            <i class="fa-solid fa-chart-line"></i> Tren Setahun
+                        </button>
                     </div>
                 </div>
 
-                                <div class="d-flex align-items-end gap-2 flex-wrap">
+                <div class="d-flex align-items-end gap-2 flex-wrap">
                     <div>
                         <select id="uploadPlantSelect" class="form-select form-select-sm" style="min-width:180px;">
                             <option value="">-- Pilih Plant --</option>
@@ -257,9 +358,19 @@
 
         <div class="chart-card mb-4">
             <div class="d-flex justify-content-between align-items-center mb-3">
-    <h6 class="fw-bold mb-0" id="chartTitle">Nasional - Semua Plant</h6>
-    <span class="badge bg-info text-dark" id="chartScopeBadge">Nasional</span>
-</div>
+                <h6 class="fw-bold mb-0" id="chartTitle">Nasional - Semua Plant</h6>
+                <span class="badge bg-info text-dark" id="chartScopeBadge">Nasional</span>
+            </div>
+
+            <!-- Tombol pilih size, hanya tampil di mode Tren Setahun -->
+            <div class="size-toggle" id="yearSizeToggle" style="display:none;">
+                <button type="button" data-size="ALL" class="active" onclick="setYearSize('ALL')">Semua</button>
+                <button type="button" data-size="AK" onclick="setYearSize('AK')">AK</button>
+                <button type="button" data-size="AM" onclick="setYearSize('AM')">AM</button>
+                <button type="button" data-size="AB" onclick="setYearSize('AB')">AB</button>
+                <button type="button" data-size="AJ" onclick="setYearSize('AJ')">AJ</button>
+            </div>
+
             <div id="chartWrapper">
                 <canvas id="uniformityChart" height="100"></canvas>
             </div>
@@ -271,17 +382,17 @@
         </div>
 
         <div class="table-card p-3" id="tableCard" style="display:none;">
-            <h6 class="fw-bold mb-3">Detail per Plant (klik baris untuk lihat rincian)</h6>
+            <h6 class="fw-bold mb-3" id="tableCardTitle">Detail per Plant (klik baris untuk lihat rincian)</h6>
             <table class="uniformity-table">
                 <thead>
                     <tr>
-                        <th>Plant</th>
-                        <th>Status</th>
+                        <th id="thFirstCol">Plant</th>
+                        <th class="col-status">Status</th>
                         <th>AK</th>
                         <th>AM</th>
                         <th>AB</th>
                         <th>AJ</th>
-                        <th>Aksi</th>
+                        <th class="col-aksi">Aksi</th>
                     </tr>
                 </thead>
                 <tbody id="plantTableBody"></tbody>
@@ -295,13 +406,15 @@
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
         const ROUTES = {
-    upload: `{{ route('slaughter.uniformity.upload') }}`,
-    cekKode: `{{ route('slaughter.uniformity.cek-kode') }}`,
-    data: `{{ route('slaughter.uniformity.data') }}`,
-    filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
-    detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
-    uploadStatus: `{{ route('slaughter.uniformity.upload-status') }}`,
-};
+            upload: `{{ route('slaughter.uniformity.upload') }}`,
+            cekKode: `{{ route('slaughter.uniformity.cek-kode') }}`,
+            data: `{{ route('slaughter.uniformity.data') }}`,
+            compareBulan: `{{ route('slaughter.uniformity.compare-bulan') }}`,
+            compareTahun: `{{ route('slaughter.uniformity.compare-tahun') }}`,
+            filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
+            detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
+            uploadStatus: `{{ route('slaughter.uniformity.upload-status') }}`,
+        };
 
         let currentRegion = '';
         let currentPlant = '';
@@ -325,9 +438,30 @@
         // Diisi setelah user mengisi modal kode, dipakai saat submit file, lalu dikosongkan lagi.
         let pendingKodeOtorisasi = '';
 
+        // ==== State fitur "Perbandingan Bulan" & "Tren Setahun" ====
+        // Daftar bulan (value: "Y-m", label: "Agustus 2026") yang punya data, dari filterOptions().
+        let comparisonMonthsList = [];
+        // Daftar tahun yang punya data (terbaru duluan), dari filterOptions(). Contoh: [2026]
+        let comparisonYearsList = [];
+        // true kalau tampilan sedang dalam mode perbandingan (bulan ATAU tahun), bukan tampilan mingguan biasa.
+        let comparisonMode = false;
+        // Jenis mode perbandingan yang aktif: 'bulan' atau 'tahun'.
+        let comparisonType = 'bulan';
+        // Hasil terakhir dari endpoint compare-bulan, dipakai render ulang saat expand/collapse baris.
+        let comparisonResult = null;
+        // Baris tabel Perbandingan Bulan cuma 1 (plant terpilih), jadi expand state-nya boolean saja.
+        let comparisonExpanded = false;
+
+        // State khusus Tren Setahun
+        let yearResult = null;               // hasil terakhir endpoint compare-tahun
+        let yearSize = 'ALL';                // 'ALL' = line chart 4 size, atau 'AK'/'AM'/'AB'/'AJ' = batang per size
+
         const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
         const TARGET_DEFAULT = 0.8;
         const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
+        const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        // Warna garis per size di line chart Tren Setahun (sengaja beda dari hijau/merah/oranye batang)
+        const SIZE_LINE_COLORS = { AK: '#2563eb', AM: '#9333ea', AB: '#0d9488', AJ: '#db2777' };
 
         // Durasi satu siklus denyut glow badge UPDATE (detik) - harus sama dengan di CSS (neonPulse)
         const BADGE_PULSE_SECONDS = 1.8;
@@ -368,8 +502,8 @@
         // Badge cuma boleh tampil kalau tabel sedang benar-benar menampilkan
         // minggu kalender berjalan (bukan minggu lama yang dipilih lewat dropdown).
         function isViewingCurrentCalendarWeek() {
-    return currentDisplayedWeekLabel === currentCalendarWeekLabel();
-}
+            return currentDisplayedWeekLabel === currentCalendarWeekLabel();
+        }
 
         // Ambil teks nama plant yang lagi dipilih di dropdown upload, untuk ditampilkan di modal kode.
         function getSelectedUploadPlantLabel() {
@@ -379,64 +513,64 @@
         }
 
         async function mulaiUploadExcel() {
-    const plant = document.getElementById('uploadPlantSelect').value;
+            const plant = document.getElementById('uploadPlantSelect').value;
 
-    if (!plant) {
-        Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
-        return;
-    }
-
-    const plantLabel = getSelectedUploadPlantLabel();
-
-    const { value: kode, isConfirmed } = await Swal.fire({
-        title: `Masukkan kode otorisasi Plant ${plantLabel}`,
-        input: 'text',
-        inputPlaceholder: 'Kode otorisasi',
-        inputAttributes: { autocapitalize: 'off', autocomplete: 'off' },
-        showCancelButton: true,
-        confirmButtonText: 'Lanjut Upload',
-        cancelButtonText: 'Batal',
-        confirmButtonColor: '#16a34a',
-        showLoaderOnConfirm: true,
-        inputValidator: (value) => {
-            if (!value || !value.trim()) {
-                return 'Kode otorisasi wajib diisi.';
+            if (!plant) {
+                Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
+                return;
             }
-        },
-        preConfirm: async (value) => {
-            // Cek kode ke server DULU, sebelum modal ditutup dan file picker dibuka
-            try {
-                const res = await fetch(ROUTES.cekKode, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': csrfToken,
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({ plant, kode_otorisasi: value.trim() }),
-                });
-                const result = await res.json();
-                if (!res.ok) {
-                    Swal.showValidationMessage(result.message || 'Kode otorisasi tidak sesuai.');
-                    return false;
-                }
-                return value.trim();
-            } catch (err) {
-                Swal.showValidationMessage('Gagal menghubungi server, coba lagi.');
-                return false;
+
+            const plantLabel = getSelectedUploadPlantLabel();
+
+            const { value: kode, isConfirmed } = await Swal.fire({
+                title: `Masukkan kode otorisasi Plant ${plantLabel}`,
+                input: 'text',
+                inputPlaceholder: 'Kode otorisasi',
+                inputAttributes: { autocapitalize: 'off', autocomplete: 'off' },
+                showCancelButton: true,
+                confirmButtonText: 'Lanjut Upload',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#16a34a',
+                showLoaderOnConfirm: true,
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Kode otorisasi wajib diisi.';
+                    }
+                },
+                preConfirm: async (value) => {
+                    // Cek kode ke server DULU, sebelum modal ditutup dan file picker dibuka
+                    try {
+                        const res = await fetch(ROUTES.cekKode, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': csrfToken,
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: new URLSearchParams({ plant, kode_otorisasi: value.trim() }),
+                        });
+                        const result = await res.json();
+                        if (!res.ok) {
+                            Swal.showValidationMessage(result.message || 'Kode otorisasi tidak sesuai.');
+                            return false;
+                        }
+                        return value.trim();
+                    } catch (err) {
+                        Swal.showValidationMessage('Gagal menghubungi server, coba lagi.');
+                        return false;
+                    }
+                },
+                allowOutsideClick: () => !Swal.isLoading(),
+            });
+
+            if (!isConfirmed) {
+                return; // user batal, atau kode salah (preConfirm return false)
             }
-        },
-        allowOutsideClick: () => !Swal.isLoading(),
-    });
 
-    if (!isConfirmed) {
-        return; // user batal, atau kode salah (preConfirm return false)
-    }
+            pendingKodeOtorisasi = kode;
+            document.getElementById('excelUploadInput').click();
+        }
 
-    pendingKodeOtorisasi = kode;
-    document.getElementById('excelUploadInput').click();
-}
-
-                async function handleExcelUpload(input) {
+        async function handleExcelUpload(input) {
             const file = input.files[0];
             if (!file) return;
 
@@ -444,7 +578,7 @@
             const tanggal = document.getElementById('uploadTanggalInput').value;
             const kodeOtorisasi = pendingKodeOtorisasi;
 
-                        if (!plant) {
+            if (!plant) {
                 Swal.fire({ title: 'Belum lengkap', text: 'Pilih Plant terlebih dahulu.', icon: 'warning' });
                 input.value = '';
                 return;
@@ -486,7 +620,7 @@
                     </div>`;
                 }
 
-                                const tanggalText = (result.tanggal_diproses && result.tanggal_diproses.length > 0)
+                const tanggalText = (result.tanggal_diproses && result.tanggal_diproses.length > 0)
                     ? result.tanggal_diproses.join(', ')
                     : '-';
 
@@ -497,7 +631,12 @@
                 });
 
                 await loadFilterOptions();
-                await refreshView();
+
+                // Kalau lagi mode Perbandingan Bulan / Tren Setahun, jangan timpa tampilan comparison
+                // dengan refreshView() mingguan - cukup refresh badge datanya saja.
+                if (!comparisonMode) {
+                    await refreshView();
+                }
                 await fetchUploadBadges();
             } catch (err) {
                 Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
@@ -508,65 +647,67 @@
         }
 
         async function loadFilterOptions() {
-    const res = await fetch(ROUTES.filterOptions);
-    const opts = await res.json();
-    plantsByRegion = opts.plants_by_region || {};
-    allPlantsByRegion = opts.all_plants_by_region || {};
-        populateUploadPlantDropdown(allPlantsByRegion);
+            const res = await fetch(ROUTES.filterOptions);
+            const opts = await res.json();
+            plantsByRegion = opts.plants_by_region || {};
+            allPlantsByRegion = opts.all_plants_by_region || {};
+            comparisonMonthsList = opts.months || [];
+            comparisonYearsList = opts.years || [];
+            populateUploadPlantDropdown(allPlantsByRegion);
 
-    const tabWrap = document.getElementById('regionTabs');
-    tabWrap.querySelectorAll('.tab-region[data-region]:not([data-region=""])').forEach(el => el.remove());
+            const tabWrap = document.getElementById('regionTabs');
+            tabWrap.querySelectorAll('.tab-region[data-region]:not([data-region=""])').forEach(el => el.remove());
 
-    // Region untuk tab diambil dari SEMUA region terdaftar (bukan cuma yang sudah ada datanya),
-    // supaya tab region tetap muncul lengkap meski belum ada plant yang upload.
-    Object.keys(allPlantsByRegion).forEach(region => {
-        const btn = document.createElement('button');
-        btn.className = 'tab-region';
-        btn.dataset.region = region;
-        btn.innerText = region;
-        btn.onclick = () => setRegion(region, btn);
-        tabWrap.appendChild(btn);
-    });
+            // Region untuk tab diambil dari SEMUA region terdaftar (bukan cuma yang sudah ada datanya),
+            // supaya tab region tetap muncul lengkap meski belum ada plant yang upload.
+            Object.keys(allPlantsByRegion).forEach(region => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-region';
+                btn.dataset.region = region;
+                btn.innerText = region;
+                btn.onclick = () => setRegion(region, btn);
+                tabWrap.appendChild(btn);
+            });
 
-    // Tombol "Jawa" (gabungan Banten, Jabar, Jateng, Jatim) - taruh persis di sebelah kanan Jatim
-    const jawaBtn = document.createElement('button');
-    jawaBtn.className = 'tab-region';
-    jawaBtn.dataset.region = '__JAWA__';
-    jawaBtn.innerText = 'Jawa';
-    jawaBtn.onclick = () => setRegion('__JAWA__', jawaBtn);
+            // Tombol "Jawa" (gabungan Banten, Jabar, Jateng, Jatim) - taruh persis di sebelah kanan Jatim
+            const jawaBtn = document.createElement('button');
+            jawaBtn.className = 'tab-region';
+            jawaBtn.dataset.region = '__JAWA__';
+            jawaBtn.innerText = 'Jawa';
+            jawaBtn.onclick = () => setRegion('__JAWA__', jawaBtn);
 
-    const jatimBtn = tabWrap.querySelector('[data-region="Jatim"]');
-    if (jatimBtn) {
-        jatimBtn.insertAdjacentElement('afterend', jawaBtn);
-    } else {
-        tabWrap.appendChild(jawaBtn); // fallback kalau Jatim belum ada di daftar
-    }
+            const jatimBtn = tabWrap.querySelector('[data-region="Jatim"]');
+            if (jatimBtn) {
+                jatimBtn.insertAdjacentElement('afterend', jawaBtn);
+            } else {
+                tabWrap.appendChild(jawaBtn); // fallback kalau Jatim belum ada di daftar
+            }
 
-    populatePlantDropdown();
-    populateWeekDropdown(opts.weeks || []);
-}
+            populatePlantDropdown();
+            populateWeekDropdown(opts.weeks || []);
+        }
 
         function populatePlantDropdown() {
-    const select = document.getElementById('plantSelect');
-    select.innerHTML = `<option value="">-- Semua Plant ${currentRegion ? 'di ' + (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) : '(Nasional)'} --</option>`;
-    let plantList = [];
-    if (currentRegion === '') {
-        Object.values(plantsByRegion).forEach(list => plantList.push(...list));
-    } else if (currentRegion === '__JAWA__') {
-        JAWA_REGIONS.forEach(r => plantList.push(...(plantsByRegion[r] || [])));
-    } else {
-        plantList = plantsByRegion[currentRegion] || [];
-    }
-    plantList.sort();
-    plantList.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p;
-        opt.innerText = p;
-        select.appendChild(opt);
-    });
-}
+            const select = document.getElementById('plantSelect');
+            select.innerHTML = `<option value="">-- Semua Plant ${currentRegion ? 'di ' + (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) : '(Nasional)'} --</option>`;
+            let plantList = [];
+            if (currentRegion === '') {
+                Object.values(plantsByRegion).forEach(list => plantList.push(...list));
+            } else if (currentRegion === '__JAWA__') {
+                JAWA_REGIONS.forEach(r => plantList.push(...(plantsByRegion[r] || [])));
+            } else {
+                plantList = plantsByRegion[currentRegion] || [];
+            }
+            plantList.sort();
+            plantList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.innerText = p;
+                select.appendChild(opt);
+            });
+        }
 
-            function populateUploadPlantDropdown(allPlantsByRegionMap) {
+        function populateUploadPlantDropdown(allPlantsByRegionMap) {
             const select = document.getElementById('uploadPlantSelect');
             select.innerHTML = `<option value="">-- Pilih Plant --</option>`;
             Object.keys(allPlantsByRegionMap).sort().forEach(region => {
@@ -582,22 +723,22 @@
             });
         }
 
-function populateWeekDropdown(weeks) {
-    const select = document.getElementById('weekSelect');
-    select.innerHTML = `<option value="">-- Minggu Terbaru --</option>`;
-    weeks.forEach(w => {
-        const opt = document.createElement('option');
-        opt.value = w.week_label;
-        opt.innerText = w.week_label;
-        select.appendChild(opt);
-    });
-}
+        function populateWeekDropdown(weeks) {
+            const select = document.getElementById('weekSelect');
+            select.innerHTML = `<option value="">-- Minggu Terbaru --</option>`;
+            weeks.forEach(w => {
+                const opt = document.createElement('option');
+                opt.value = w.week_label;
+                opt.innerText = w.week_label;
+                select.appendChild(opt);
+            });
+        }
 
-function setWeek(week) {
-    currentWeek = week;
-    refreshView();
-    renderPlantTable(currentFullPlantMapCache || {});
-}
+        function setWeek(week) {
+            currentWeek = week;
+            refreshView();
+            renderPlantTable(currentFullPlantMapCache || {});
+        }
 
         function setRegion(region, btnEl) {
             currentRegion = region;
@@ -614,22 +755,22 @@ function setWeek(week) {
         }
 
         function buildQuery() {
-    const params = new URLSearchParams();
-    if (currentRegion && currentRegion !== '__JAWA__') params.set('region', currentRegion);
-    if (currentWeek) params.set('week', currentWeek);
-    return params.toString();
-}
+            const params = new URLSearchParams();
+            if (currentRegion && currentRegion !== '__JAWA__') params.set('region', currentRegion);
+            if (currentWeek) params.set('week', currentWeek);
+            return params.toString();
+        }
 
         function updateChartTitle() {
-    let title = 'Nasional - Semua Plant';
-    if (currentPlant) title = currentPlant;
-    else if (currentRegion === '__JAWA__') title = 'Jawa - Semua Plant';
-    else if (currentRegion) title = 'Region ' + currentRegion + ' - Semua Plant';
-    document.getElementById('chartTitle').innerText = title;
+            let title = 'Nasional - Semua Plant';
+            if (currentPlant) title = currentPlant;
+            else if (currentRegion === '__JAWA__') title = 'Jawa - Semua Plant';
+            else if (currentRegion) title = 'Region ' + currentRegion + ' - Semua Plant';
+            document.getElementById('chartTitle').innerText = title;
 
-    const scopeText = currentPlant || (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) || 'Nasional';
-    document.getElementById('chartScopeBadge').innerText = scopeText;
-}
+            const scopeText = currentPlant || (currentRegion === '__JAWA__' ? 'Jawa' : currentRegion) || 'Nasional';
+            document.getElementById('chartScopeBadge').innerText = scopeText;
+        }
 
         // Gabungkan banyak baris jadi total per size (dipakai utk chart ringkasan)
         function aggregateBySize(rows) {
@@ -660,7 +801,7 @@ function setWeek(week) {
         }
 
         // Kelompokkan baris jadi per plant -> per size (dipakai utk tabel detail)
-                function groupByPlant(rows) {
+        function groupByPlant(rows) {
             // Tahap 1: akumulasi angka mentah per plant+size (bisa banyak baris kalau lintas hari)
             const bucket = {};
             rows.forEach(r => {
@@ -729,6 +870,11 @@ function setWeek(week) {
         let currentFullPlantMapCache = {};
 
         async function refreshView() {
+            // Jangan timpa tampilan Perbandingan Bulan / Tren Setahun dengan tampilan mingguan biasa.
+            // refreshView() masih bisa "tertrigger" secara tidak langsung (misal setelah upload),
+            // jadi guard ini penting supaya mode comparison tidak ketimpa tiba-tiba.
+            if (comparisonMode) return;
+
             updateChartTitle();
             const qs = buildQuery();
 
@@ -802,86 +948,86 @@ function setWeek(week) {
         }
 
         function renderChart(agg) {
-    const ctx = document.getElementById('uniformityChart').getContext('2d');
-    const labels = agg.map(a => a.size);
-    const targetPct = (agg[0]?.target ?? TARGET_DEFAULT) * 100;
+            const ctx = document.getElementById('uniformityChart').getContext('2d');
+            const labels = agg.map(a => a.size);
+            const targetPct = (agg[0]?.target ?? TARGET_DEFAULT) * 100;
 
-    const datasets = [
-        {
-            type: 'bar',
-            label: '% Standart',
-            data: agg.map(a => Number((a.persen_standart * 100).toFixed(1))),
-            backgroundColor: '#16a34a',
-            borderRadius: 6,
-            datalabels: { anchor: 'end', align: 'top', color: '#16a34a', font: { weight: 'bold', size: 11 } },
-        },
-        {
-            type: 'bar',
-            label: '% Under',
-            data: agg.map(a => Number((a.persen_under * 100).toFixed(1))),
-            backgroundColor: '#f87171',
-            borderRadius: 6,
-            datalabels: { anchor: 'end', align: 'top', color: '#b91c1c', font: { weight: 'bold', size: 11 } },
-        },
-        {
-            type: 'bar',
-            label: '% Over',
-            data: agg.map(a => Number((a.persen_over * 100).toFixed(1))),
-            backgroundColor: '#f59e0b',
-            borderRadius: 6,
-            datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
-        },
-    ];
-
-    // Plugin custom: gambar garis target lurus penuh dari ujung kiri sampai ujung kanan chart
-    const targetLinePlugin = {
-        id: 'targetLinePlugin',
-        afterDatasetsDraw(chart) {
-            const { ctx, chartArea, scales } = chart;
-            const y = scales.y.getPixelForValue(targetPct);
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.setLineDash([6, 4]);
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#16a34a';
-            ctx.moveTo(chartArea.left, y);
-            ctx.lineTo(chartArea.right, y);
-            ctx.stroke();
-
-            ctx.setLineDash([]);
-            ctx.fillStyle = '#16a34a';
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'right';
-            ctx.fillText(`Target LB Standard (${targetPct}%)`, chartArea.right, y - 6);
-            ctx.restore();
-        },
-    };
-
-    if (chartInstance) chartInstance.destroy();
-
-    chartInstance = new Chart(ctx, {
-        type: 'bar',
-        data: { labels, datasets },
-        plugins: [targetLinePlugin],
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { position: 'bottom' },
-                datalabels: {
-                    formatter: (v) => v + '%',
+            const datasets = [
+                {
+                    type: 'bar',
+                    label: '% Standart',
+                    data: agg.map(a => Number((a.persen_standart * 100).toFixed(1))),
+                    backgroundColor: '#16a34a',
+                    borderRadius: 6,
+                    datalabels: { anchor: 'end', align: 'top', color: '#16a34a', font: { weight: 'bold', size: 11 } },
                 },
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: { callback: (v) => v + '%' },
+                {
+                    type: 'bar',
+                    label: '% Under',
+                    data: agg.map(a => Number((a.persen_under * 100).toFixed(1))),
+                    backgroundColor: '#f87171',
+                    borderRadius: 6,
+                    datalabels: { anchor: 'end', align: 'top', color: '#b91c1c', font: { weight: 'bold', size: 11 } },
                 },
-            },
-        },
-    });
-}
+                {
+                    type: 'bar',
+                    label: '% Over',
+                    data: agg.map(a => Number((a.persen_over * 100).toFixed(1))),
+                    backgroundColor: '#f59e0b',
+                    borderRadius: 6,
+                    datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
+                },
+            ];
+
+            // Plugin custom: gambar garis target lurus penuh dari ujung kiri sampai ujung kanan chart
+            const targetLinePlugin = {
+                id: 'targetLinePlugin',
+                afterDatasetsDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const y = scales.y.getPixelForValue(targetPct);
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 4]);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#16a34a';
+                    ctx.moveTo(chartArea.left, y);
+                    ctx.lineTo(chartArea.right, y);
+                    ctx.stroke();
+
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#16a34a';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Target LB Standard (${targetPct}%)`, chartArea.right, y - 6);
+                    ctx.restore();
+                },
+            };
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                plugins: [targetLinePlugin],
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        datalabels: {
+                            formatter: (v) => v + '%',
+                        },
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: (v) => v + '%' },
+                        },
+                    },
+                },
+            });
+        }
 
         function pctChip(value) {
             const pct = (value * 100).toFixed(1);
@@ -927,12 +1073,12 @@ function setWeek(week) {
                 const mainRow = `
                     <tr class="plant-row" onclick="togglePlantRow('${plant.replace(/'/g, "\\'")}')">
                         <td>
-    <i class="fa-solid fa-chevron-down expand-icon ${isExpanded ? 'open' : ''}"></i>
-    ${plant}
-</td>
-<td class="col-status">${plantBadgeHtml(plant)}</td>
-${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '-'}</td>`).join('')}
-                        <td onclick="event.stopPropagation();">
+                            <i class="fa-solid fa-chevron-down expand-icon ${isExpanded ? 'open' : ''}"></i>
+                            ${plant}
+                        </td>
+                        <td class="col-status">${plantBadgeHtml(plant)}</td>
+                        ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '-'}</td>`).join('')}
+                        <td class="col-aksi" onclick="event.stopPropagation();">
                             <a href="${detailUrl}" class="btn btn-sm btn-outline-primary btn-detail-plant">
                                 <i class="fa-solid fa-magnifying-glass"></i> Detail
                             </a>
@@ -985,8 +1131,8 @@ ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '
             }
 
             // baris baru: set plant ini jadi scope aktif buat chart & badge
-    currentPlant = plant;
-    document.getElementById('plantSelect').value = plant; // biar dropdown ikut nyocok
+            currentPlant = plant;
+            document.getElementById('plantSelect').value = plant; // biar dropdown ikut nyocok
             refreshView();
         }
 
@@ -1018,8 +1164,732 @@ ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_standart) : '
                 uploadBadgeMap = {};
             }
 
-            // Re-render tabel yang sudah ada di layar supaya badge langsung update
-            renderPlantTable(currentFullPlantMapCache);
+            // Re-render tabel yang sudah ada di layar supaya badge langsung update.
+            // Kalau lagi mode Perbandingan Bulan / Tren Setahun, tabelnya beda struktur (tanpa badge),
+            // jadi jangan ditimpa oleh renderPlantTable().
+            if (!comparisonMode) {
+                renderPlantTable(currentFullPlantMapCache);
+            }
+        }
+
+        // ==========================================================
+        // FITUR: PERBANDINGAN BULAN
+        // ==========================================================
+
+        // Buka modal pilih 2 bulan untuk plant yang sedang aktif di dropdown (currentPlant).
+        async function bukaModalPerbandinganBulan() {
+            if (!currentPlant) {
+                Swal.fire({
+                    title: 'Pilih plant dulu',
+                    text: 'Pilih salah satu plant di dropdown sebelum membuka Perbandingan Bulan.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            if (comparisonMonthsList.length < 2) {
+                Swal.fire({
+                    title: 'Data belum cukup',
+                    text: 'Belum ada minimal 2 bulan dengan data untuk dibandingkan.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            const monthOptionsHtml = comparisonMonthsList
+                .map(m => `<option value="${m.value}">${m.label}</option>`)
+                .join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: `Perbandingan Bulan - ${currentPlant}`,
+                html: `
+                    <div style="text-align:left; margin-bottom:10px;">
+                        <label style="font-size:0.8rem; font-weight:600;">Bulan 1</label>
+                        <select id="swalBulan1" class="form-select form-select-sm">${monthOptionsHtml}</select>
+                    </div>
+                    <div style="text-align:left;">
+                        <label style="font-size:0.8rem; font-weight:600;">Bulan 2</label>
+                        <select id="swalBulan2" class="form-select form-select-sm">${monthOptionsHtml}</select>
+                    </div>
+                `,
+                didOpen: () => {
+                    // Default: Bulan 2 = bulan terbaru (comparisonMonthsList sudah urut terbaru duluan),
+                    // Bulan 1 = bulan sebelumnya kalau ada. User tetap bebas ganti keduanya.
+                    document.getElementById('swalBulan2').value = comparisonMonthsList[0].value;
+                    if (comparisonMonthsList[1]) {
+                        document.getElementById('swalBulan1').value = comparisonMonthsList[1].value;
+                    }
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Bandingkan',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#0a9396',
+                preConfirm: () => {
+                    const b1 = document.getElementById('swalBulan1').value;
+                    const b2 = document.getElementById('swalBulan2').value;
+                    if (b1 === b2) {
+                        Swal.showValidationMessage('Bulan 1 dan Bulan 2 tidak boleh sama.');
+                        return false;
+                    }
+                    return [b1, b2];
+                },
+            });
+
+            if (!formValues) return; // user batal / validasi gagal
+
+            await jalankanPerbandinganBulan(currentPlant, formValues);
+        }
+
+        // Panggil endpoint compare-bulan, simpan hasilnya, lalu render tampilan comparison.
+        async function jalankanPerbandinganBulan(plant, months) {
+            Swal.fire({
+                title: 'Memuat data perbandingan...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            try {
+                const params = new URLSearchParams();
+                params.set('plant', plant);
+                months.forEach(m => params.append('bulan[]', m));
+
+                const res = await fetch(`${ROUTES.compareBulan}?${params.toString()}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Gagal mengambil data perbandingan.');
+
+                comparisonResult = data;
+                comparisonMode = true;
+                comparisonType = 'bulan';
+                comparisonExpanded = false;
+
+                Swal.close();
+                renderComparisonView();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            }
+        }
+
+        // Keluar dari mode Perbandingan Bulan / Tren Setahun, balik ke tampilan mingguan biasa.
+        function keluarModePerbandingan() {
+            comparisonMode = false;
+            comparisonType = 'bulan';
+            comparisonResult = null;
+            comparisonExpanded = false;
+
+            yearResult = null;
+            yearSize = 'ALL';
+            document.getElementById('yearSizeToggle').style.display = 'none';
+            syncYearSizeToggle();
+
+            document.getElementById('comparisonBanner').style.display = 'none';
+            document.getElementById('tableCard').classList.remove('compare-active');
+            document.getElementById('tableCardTitle').innerText = 'Detail per Plant (klik baris untuk lihat rincian)';
+            document.getElementById('thFirstCol').innerText = 'Plant';
+
+            document.getElementById('regionTabs').classList.remove('filters-disabled');
+            document.getElementById('plantSelect').disabled = false;
+            document.getElementById('weekSelect').disabled = false;
+
+            refreshView();
+        }
+
+        // Render keseluruhan tampilan mode Perbandingan Bulan: banner, chart grouped-bar, tabel 1-baris.
+        function renderComparisonView() {
+            if (!comparisonResult) return;
+            const [m1, m2] = comparisonResult.bulan;
+
+            document.getElementById('comparisonBanner').style.display = 'flex';
+            document.getElementById('comparisonBannerText').innerHTML =
+                `<i class="fa-solid fa-code-compare"></i> Perbandingan Bulan &mdash; ${comparisonResult.plant}: ${m1.label} vs ${m2.label}`;
+
+            // Filter normal (region/plant/week) dinonaktifkan visual selama mode ini aktif,
+            // supaya tidak membingungkan (klik region/plant/week tidak akan mengganti tampilan comparison).
+            document.getElementById('regionTabs').classList.add('filters-disabled');
+            document.getElementById('plantSelect').disabled = true;
+            document.getElementById('weekSelect').disabled = true;
+
+            // Pastikan sisa tampilan Tren Setahun (kalau sebelumnya aktif) tidak ikut terbawa
+            document.getElementById('yearSizeToggle').style.display = 'none';
+            document.getElementById('thFirstCol').innerText = 'Plant';
+
+            document.getElementById('chartTitle').innerText = `${comparisonResult.plant} - Perbandingan Bulan`;
+            document.getElementById('chartScopeBadge').innerText = `${m1.label} vs ${m2.label}`;
+
+            document.getElementById('infoWeek').innerText = '';
+            document.getElementById('statStrip').style.display = 'none'; // stat strip mingguan tidak relevan di sini
+
+            showChartEmptyState(false);
+            document.getElementById('statStrip').style.display = 'none';
+            renderComparisonChart(m1, m2);
+
+            document.getElementById('tableCardTitle').innerText = `Detail ${comparisonResult.plant} (klik untuk lihat rincian per bulan)`;
+            document.getElementById('tableCard').style.display = 'block';
+            document.getElementById('tableCard').classList.add('compare-active');
+            renderComparisonTable(m1, m2);
+        }
+
+        // Grouped bar chart: 4 size di X-axis, 6 dataset (Standart/Under/Over x 2 bulan).
+        // Size yang total_lb-nya 0 (tidak ada data bulan itu) dikasih nilai null supaya
+        // Chart.js tidak menggambar bar-nya sama sekali (bukan digambar sebagai 0%).
+        function renderComparisonChart(m1, m2) {
+            const ctx = document.getElementById('uniformityChart').getContext('2d');
+            const labels = SIZE_ORDER;
+
+            function seriesFor(bulanObj, metricKey) {
+                return SIZE_ORDER.map(sz => {
+                    const s = bulanObj.sizes[sz];
+                    if (!s || s.total_lb === 0) return null;
+                    return Number((s[metricKey] * 100).toFixed(1));
+                });
+            }
+
+            const rawDatasets = [
+                { label: `${m1.label} - Standart`, data: seriesFor(m1, 'persen_standart'), backgroundColor: '#16a34a' },
+                { label: `${m1.label} - Under`,    data: seriesFor(m1, 'persen_under'),    backgroundColor: '#f87171' },
+                { label: `${m1.label} - Over`,     data: seriesFor(m1, 'persen_over'),     backgroundColor: '#f59e0b' },
+                { label: `${m2.label} - Standart`, data: seriesFor(m2, 'persen_standart'), backgroundColor: '#0f6b2e' },
+                { label: `${m2.label} - Under`,    data: seriesFor(m2, 'persen_under'),    backgroundColor: '#b91c1c' },
+                { label: `${m2.label} - Over`,     data: seriesFor(m2, 'persen_over'),     backgroundColor: '#b45309' },
+            ];
+
+            const datasets = rawDatasets.map(d => ({
+                type: 'bar',
+                label: d.label,
+                data: d.data,
+                backgroundColor: d.backgroundColor,
+                borderRadius: 4,
+                datalabels: {
+                    anchor: 'end',
+                    align: 'top',
+                    color: d.backgroundColor,
+                    font: { weight: 'bold', size: 9 },
+                    formatter: (v) => (v === null ? '' : v + '%'),
+                },
+            }));
+
+            // Target dianggap sama untuk kedua bulan (default 0.8) - ambil dari size AK di bulan
+            // manapun yang punya data, fallback ke TARGET_DEFAULT kalau dua-duanya kosong.
+            const targetSource = (m2.sizes.AK && m2.sizes.AK.total_lb > 0) ? m2.sizes.AK
+                : (m1.sizes.AK && m1.sizes.AK.total_lb > 0) ? m1.sizes.AK
+                : null;
+            const targetPct = (targetSource ? targetSource.target : TARGET_DEFAULT) * 100;
+
+            const targetLinePlugin = {
+                id: 'targetLinePluginCompare',
+                afterDatasetsDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const y = scales.y.getPixelForValue(targetPct);
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 4]);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#16a34a';
+                    ctx.moveTo(chartArea.left, y);
+                    ctx.lineTo(chartArea.right, y);
+                    ctx.stroke();
+
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#16a34a';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Target LB Standard (${targetPct}%)`, chartArea.right, y - 6);
+                    ctx.restore();
+                },
+            };
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: { labels, datasets },
+                plugins: [targetLinePlugin],
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+                        datalabels: {},
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: (v) => v + '%' },
+                        },
+                    },
+                },
+            });
+        }
+
+        // Tabel mode Perbandingan Bulan: cuma 1 baris (plant terpilih). Chip utama pakai
+        // nilai Bulan 2 (slot kedua yang dipilih user, default-nya bulan terbaru). Expand
+        // menampilkan 2 size-card berdampingan (Bulan 1 vs Bulan 2) untuk tiap size.
+        function renderComparisonTable(m1, m2) {
+            const tbody = document.getElementById('plantTableBody');
+            const plant = comparisonResult.plant;
+
+            function chipFor(sz) {
+                const s = m2.sizes[sz];
+                if (!s || s.total_lb === 0) return '-';
+                return pctChip(s.persen_standart);
+            }
+
+            const mainRow = `
+                <tr class="plant-row" onclick="toggleComparisonRow()">
+                    <td>
+                        <i class="fa-solid fa-chevron-down expand-icon ${comparisonExpanded ? 'open' : ''}"></i>
+                        ${plant}
+                    </td>
+                    <td class="col-status"></td>
+                    ${SIZE_ORDER.map(sz => `<td>${chipFor(sz)}</td>`).join('')}
+                    <td class="col-aksi"></td>
+                </tr>
+            `;
+
+            const detailRow = comparisonExpanded ? `
+                <tr class="detail-row">
+                    <td colspan="7">
+                        <div style="padding:14px 16px; display:flex; flex-direction:column; gap:14px;">
+                            ${SIZE_ORDER.map(sz => renderComparisonSizeGroup(sz, m1, m2)).join('')}
+                        </div>
+                    </td>
+                </tr>
+            ` : '';
+
+            tbody.innerHTML = mainRow + detailRow;
+        }
+
+        function renderComparisonSizeGroup(size, m1, m2) {
+            return `
+                <div class="compare-size-group">
+                    <div class="compare-size-title">${size}</div>
+                    <div class="size-breakdown" style="padding:0;">
+                        ${renderSizeCardLabeled(size, m1.sizes[size], m1.label)}
+                        ${renderSizeCardLabeled(size, m2.sizes[size], m2.label, m1.sizes[size])}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Bandingkan valueNow (bulan pembanding) vs valueBefore (bulan baseline), return ikon panah tren.
+        // higherIsBetter: true kalau naik = bagus (Standart), false kalau naik = jelek (Under/Over).
+        // pembandingLabel (opsional): nama bulan pembanding untuk tooltip, misal "Agustus".
+        function trendArrowHtml(valueNow, valueBefore, higherIsBetter, pembandingLabel) {
+            if (valueBefore === null || valueBefore === undefined) return '';
+            const diff = valueNow - valueBefore;
+            const EPSILON = 0.0005; // selisih < 0.05% dianggap tetap/flat
+
+            let icon = 'fa-minus';
+            let cls = 'flat';
+            if (diff > EPSILON) {
+                icon = 'fa-arrow-up';
+                cls = higherIsBetter ? 'good' : 'bad';
+            } else if (diff < -EPSILON) {
+                icon = 'fa-arrow-down';
+                cls = higherIsBetter ? 'bad' : 'good';
+            }
+
+            const deltaText = (diff * 100).toFixed(1);
+            const namaPembanding = pembandingLabel || 'bulan pembanding';
+            const tooltip = cls === 'flat' ? `Tidak berubah vs ${namaPembanding}` : `${diff > 0 ? '+' : ''}${deltaText}% vs ${namaPembanding}`;
+
+            return `<i class="fa-solid ${icon} trend-arrow ${cls}" title="${tooltip}"></i>`;
+        }
+
+        function renderSizeCardLabeled(size, data, monthLabel, compareData) {
+            if (!data || data.total_lb === 0) {
+                return `
+                    <div class="size-card" style="--sc:#94a3b8;">
+                        <div class="label">${monthLabel}</div>
+                        <div class="text-muted small">Tidak ada data</div>
+                    </div>
+                `;
+            }
+            const gap = data.persen_standart - data.target;
+            const gapClass = gap >= 0 ? 'ok' : 'bad';
+            const gapText = gap >= 0
+                ? `✓ Capai target (+${(gap * 100).toFixed(1)}%)`
+                : `⚠ Kurang ${Math.abs(gap * 100).toFixed(1)}% dari target`;
+            const color = gap >= 0 ? '#16a34a' : '#f87171';
+
+            const arrowStandart = compareData ? trendArrowHtml(data.persen_standart, compareData.persen_standart, true) : '';
+            const arrowUnder = compareData ? trendArrowHtml(data.persen_under, compareData.persen_under, false) : '';
+            const arrowOver = compareData ? trendArrowHtml(data.persen_over, compareData.persen_over, false) : '';
+
+            return `
+                <div class="size-card" style="--sc:${color};">
+                    <div class="label">${monthLabel}</div>
+                    <div class="row-metric"><span>% Standart</span><b>${(data.persen_standart * 100).toFixed(1)}%${arrowStandart}</b></div>
+                    <div class="row-metric"><span>% Under</span><b>${(data.persen_under * 100).toFixed(1)}%${arrowUnder}</b></div>
+                    <div class="row-metric"><span>% Over</span><b>${(data.persen_over * 100).toFixed(1)}%${arrowOver}</b></div>
+                    <div class="row-metric"><span style="color:#16a34a;">Target</span><b style="color:#16a34a;">${(data.target * 100).toFixed(0)}%</b></div>
+                    <div class="gap-line ${gapClass}">${gapText}</div>
+                </div>
+            `;
+        }
+
+        function toggleComparisonRow() {
+            comparisonExpanded = !comparisonExpanded;
+            const [m1, m2] = comparisonResult.bulan;
+            renderComparisonTable(m1, m2);
+        }
+
+        // ==========================================================
+        // FITUR: TREN SETAHUN
+        // ==========================================================
+
+        // Buka modal pilih tahun untuk plant yang sedang aktif di dropdown (currentPlant).
+        async function bukaModalTrenSetahun() {
+            if (!currentPlant) {
+                Swal.fire({
+                    title: 'Pilih plant dulu',
+                    text: 'Pilih salah satu plant di dropdown sebelum membuka Tren Setahun.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            if (comparisonYearsList.length < 1) {
+                Swal.fire({
+                    title: 'Data belum ada',
+                    text: 'Belum ada data tahun manapun untuk ditampilkan.',
+                    icon: 'warning',
+                });
+                return;
+            }
+
+            const yearOptionsHtml = comparisonYearsList
+                .map(y => `<option value="${y}">${y}</option>`)
+                .join('');
+
+            const { value: tahun } = await Swal.fire({
+                title: `Tren Setahun - ${currentPlant}`,
+                html: `
+                    <div style="text-align:left;">
+                        <label style="font-size:0.8rem; font-weight:600;">Tahun</label>
+                        <select id="swalTahun" class="form-select form-select-sm">${yearOptionsHtml}</select>
+                    </div>
+                `,
+                didOpen: () => {
+                    // comparisonYearsList sudah urut terbaru duluan, jadi default = tahun terbaru
+                    document.getElementById('swalTahun').value = comparisonYearsList[0];
+                },
+                showCancelButton: true,
+                confirmButtonText: 'Tampilkan',
+                cancelButtonText: 'Batal',
+                confirmButtonColor: '#0a9396',
+                preConfirm: () => document.getElementById('swalTahun').value,
+            });
+
+            if (!tahun) return; // user batal
+
+            await jalankanTrenSetahun(currentPlant, tahun);
+        }
+
+        // Panggil endpoint compare-tahun, simpan hasilnya, lalu render tampilan Tren Setahun.
+        async function jalankanTrenSetahun(plant, tahun) {
+            Swal.fire({
+                title: 'Memuat data tren setahun...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading(),
+            });
+
+            try {
+                const params = new URLSearchParams({ plant, tahun });
+                const res = await fetch(`${ROUTES.compareTahun}?${params.toString()}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Gagal mengambil data tren setahun.');
+
+                yearResult = data;
+                yearSize = 'ALL';
+                comparisonMode = true;
+                comparisonType = 'tahun';
+
+                Swal.close();
+                renderYearView();
+            } catch (err) {
+                Swal.fire({ title: 'Gagal', text: err.message, icon: 'error' });
+            }
+        }
+
+        // Render keseluruhan tampilan Tren Setahun: banner, tombol size, chart, tabel 12 bulan.
+        function renderYearView() {
+            if (!yearResult) return;
+
+            document.getElementById('comparisonBanner').style.display = 'flex';
+            document.getElementById('comparisonBannerText').innerHTML =
+                `<i class="fa-solid fa-chart-line"></i> Tren Setahun &mdash; ${yearResult.plant}: ${yearResult.tahun}`;
+
+            document.getElementById('regionTabs').classList.add('filters-disabled');
+            document.getElementById('plantSelect').disabled = true;
+            document.getElementById('weekSelect').disabled = true;
+
+            document.getElementById('infoWeek').innerText = '';
+            showChartEmptyState(false);
+            document.getElementById('statStrip').style.display = 'none';
+
+            document.getElementById('yearSizeToggle').style.display = 'flex';
+            syncYearSizeToggle();
+            renderYearChart();
+
+            document.getElementById('thFirstCol').innerText = 'Bulan';
+            document.getElementById('tableCardTitle').innerText =
+                `Detail ${yearResult.plant} ${yearResult.tahun}`;
+            document.getElementById('tableCard').style.display = 'block';
+            document.getElementById('tableCard').classList.add('compare-active');
+            renderYearTable();
+        }
+
+        // Ganti size yang ditampilkan di chart (tanpa request ulang, data 12 bulan x 4 size sudah dimuat).
+        function setYearSize(size) {
+            yearSize = size;
+            syncYearSizeToggle();
+            renderYearChart();
+        }
+
+        function syncYearSizeToggle() {
+            document.querySelectorAll('#yearSizeToggle button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.size === yearSize);
+            });
+        }
+
+        // Nilai persen (0-100, 1 desimal) untuk 1 bulan + 1 size + 1 metrik.
+        // Return null kalau bulan itu tidak ada data, supaya jadi celah di chart (bukan 0%).
+        function yearValue(bulanObj, size, metricKey) {
+            const s = bulanObj.sizes[size];
+            if (!s || s.total_lb === 0) return null;
+            return Number((s[metricKey] * 100).toFixed(1));
+        }
+
+        // Ambil target dari data (semua size sama, default 0.8), fallback ke TARGET_DEFAULT kalau setahun kosong.
+        function yearTargetPct() {
+            for (const b of yearResult.bulan) {
+                for (const sz of SIZE_ORDER) {
+                    const s = b.sizes[sz];
+                    if (s && s.total_lb > 0) return Number(s.target) * 100;
+                }
+            }
+            return TARGET_DEFAULT * 100;
+        }
+
+        function makeTargetLinePlugin(id, targetPct) {
+            return {
+                id,
+                afterDatasetsDraw(chart) {
+                    const { ctx, chartArea, scales } = chart;
+                    const y = scales.y.getPixelForValue(targetPct);
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([6, 4]);
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#16a34a';
+                    ctx.moveTo(chartArea.left, y);
+                    ctx.lineTo(chartArea.right, y);
+                    ctx.stroke();
+
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#16a34a';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Target LB Standard (${targetPct}%)`, chartArea.right, y - 6);
+                    ctx.restore();
+                },
+            };
+        }
+
+        // Chart Tren Setahun:
+        // - yearSize 'ALL': line chart 4 garis (AK, AM, AB, AJ), metrik % Standart saja.
+        // - yearSize satu size: batang, 3 batang per bulan (Standart hijau, Under merah, Over oranye).
+        function renderYearChart() {
+            if (!yearResult) return;
+
+            const ctx = document.getElementById('uniformityChart').getContext('2d');
+            const bulanArr = yearResult.bulan;
+            const labels = MONTH_SHORT;
+            const targetPct = yearTargetPct();
+            const isAll = yearSize === 'ALL';
+
+            document.getElementById('chartTitle').innerText =
+                `${yearResult.plant} - Tren Setahun ${yearResult.tahun}` + (isAll ? '' : ` \u00b7 ${yearSize}`);
+            document.getElementById('chartScopeBadge').innerText = isAll ? `Tahun ${yearResult.tahun}` : `${yearSize} \u00b7 ${yearResult.tahun}`;
+
+            let datasets;
+            let chartType;
+
+            if (isAll) {
+    chartType = 'bar';
+    datasets = SIZE_ORDER.map(sz => ({
+        type: 'bar',
+        label: sz,
+        data: bulanArr.map(b => yearValue(b, sz, 'persen_standart')),
+        backgroundColor: SIZE_LINE_COLORS[sz],
+        borderRadius: 3,
+        _size: sz,
+        datalabels: {
+            anchor: 'end',
+            align: 'top',
+            color: SIZE_LINE_COLORS[sz],
+            font: { weight: 'bold', size: 8 },
+            formatter: (v) => (v === null || v === undefined ? '' : v + '%'),
+        },
+    }));
+} else {
+                chartType = 'bar';
+                const metrics = [
+                    { key: 'persen_standart', label: '% Standart', bg: '#16a34a', text: '#16a34a' },
+                    { key: 'persen_under',    label: '% Under',    bg: '#f87171', text: '#b91c1c' },
+                    { key: 'persen_over',     label: '% Over',     bg: '#f59e0b', text: '#b45309' },
+                ];
+                datasets = metrics.map(m => ({
+                    type: 'bar',
+                    label: m.label,
+                    data: bulanArr.map(b => yearValue(b, yearSize, m.key)),
+                    backgroundColor: m.bg,
+                    borderRadius: 4,
+                    _size: yearSize,
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'top',
+                        color: m.text,
+                        font: { weight: 'bold', size: 8 },
+                        formatter: (v) => (v === null || v === undefined ? '' : v + '%'),
+                    },
+                }));
+            }
+
+            const tooltipCallbacks = {
+                title: (items) => {
+                    const b = bulanArr[items[0].dataIndex];
+                    return `${b.label} ${yearResult.tahun}`;
+                },
+                label: (c) => {
+                    const v = c.parsed.y;
+                    if (v === null || v === undefined) return `${c.dataset.label}: tidak ada data`;
+                    if (isAll) {
+                        const total = bulanArr[c.dataIndex].sizes[c.dataset._size].total_lb;
+                        return `${c.dataset.label}: ${v}% (total ${Number(total).toLocaleString('id-ID')} LB)`;
+                    }
+                    return `${c.dataset.label}: ${v}%`;
+                },
+                footer: (items) => {
+                    if (isAll || !items.length) return '';
+                    const total = bulanArr[items[0].dataIndex].sizes[yearSize].total_lb;
+                    return total > 0 ? `Total ${Number(total).toLocaleString('id-ID')} LB` : '';
+                },
+            };
+
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: chartType,
+                data: { labels, datasets },
+                plugins: [makeTargetLinePlugin('targetLinePluginYear', targetPct)],
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: tooltipCallbacks },
+                        // Mode garis: label angka permanen ditiadakan (4 garis akan saling tumpuk), angka ada di tooltip & tabel.
+                        datalabels: {},
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: isAll, text: '% Standart' },
+                            ticks: { callback: (v) => v + '%' },
+                        },
+                    },
+                },
+            });
+        }
+
+        // Apakah bulan ini punya data di minimal 1 size (konsisten dengan chart: total_lb 0 = tidak ada data).
+        function monthHasData(bulanObj) {
+            return SIZE_ORDER.some(sz => bulanObj.sizes[sz] && bulanObj.sizes[sz].total_lb > 0);
+        }
+
+        // Tabel Tren Setahun: semua bulan langsung tampil berurutan (tanpa expand/collapse).
+        // - Bulan yang punya data: 1 baris bulan (chip % Standart) + 4 kartu rincian per size di bawahnya.
+        // - Bulan kosong: 1 baris saja bertuliskan "Tidak ada data".
+        // Panah tren tiap bulan dibandingkan dengan bulan TERAKHIR yang punya data (bukan sekadar bulan kalender sebelumnya).
+        function renderYearTable() {
+            const tbody = document.getElementById('plantTableBody');
+            const bulanArr = yearResult.bulan;
+            let bulanPembanding = null; // bulan terakhir yang punya data, dilewati kalau bulan kosong
+
+            tbody.innerHTML = bulanArr.map(b => {
+                if (!monthHasData(b)) {
+                    return `
+                        <tr class="month-row">
+                            <td>${b.label}</td>
+                            <td colspan="4" class="text-muted small">Tidak ada data</td>
+                        </tr>
+                    `;
+                }
+
+                const chips = SIZE_ORDER.map(sz => {
+                    const s = b.sizes[sz];
+                    return `<td>${(s && s.total_lb > 0) ? pctChip(s.persen_standart) : '-'}</td>`;
+                }).join('');
+
+                const cards = SIZE_ORDER.map(sz => renderYearSizeCard(
+                    sz,
+                    b.sizes[sz],
+                    bulanPembanding ? bulanPembanding.sizes[sz] : null,
+                    bulanPembanding ? bulanPembanding.label : ''
+                )).join('');
+
+                bulanPembanding = b; // bulan ini jadi pembanding untuk bulan berikutnya yang punya data
+
+                return `
+                    <tr class="month-row">
+                        <td>${b.label}</td>
+                        <td class="col-status"></td>
+                        ${chips}
+                        <td class="col-aksi"></td>
+                    </tr>
+                    <tr class="detail-row">
+                        <td colspan="7">
+                            <div class="size-breakdown">${cards}</div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Size-card rincian 1 bulan di Tren Setahun (sama seperti renderSizeCard, plus baris Total LB dan panah tren).
+        // compareData = data size yang sama di bulan pembanding (null kalau tidak ada), compareLabel = nama bulan pembanding.
+        function renderYearSizeCard(size, data, compareData, compareLabel) {
+            if (!data || data.total_lb === 0) {
+                return `<div class="size-card" style="--sc:#94a3b8;"><div class="label">${size}</div><div class="text-muted small">Tidak ada data</div></div>`;
+            }
+            const gap = data.persen_standart - data.target;
+            const gapClass = gap >= 0 ? 'ok' : 'bad';
+            const gapText = gap >= 0
+                ? `✓ Capai target (+${(gap * 100).toFixed(1)}%)`
+                : `⚠ Kurang ${Math.abs(gap * 100).toFixed(1)}% dari target`;
+            const color = gap >= 0 ? '#16a34a' : '#f87171';
+
+            // Panah hanya muncul kalau bulan pembanding punya data untuk size ini
+            const punyaPembanding = compareData && compareData.total_lb > 0;
+            const arrowStandart = punyaPembanding ? trendArrowHtml(data.persen_standart, compareData.persen_standart, true, compareLabel) : '';
+            const arrowUnder = punyaPembanding ? trendArrowHtml(data.persen_under, compareData.persen_under, false, compareLabel) : '';
+            const arrowOver = punyaPembanding ? trendArrowHtml(data.persen_over, compareData.persen_over, false, compareLabel) : '';
+
+            return `
+                <div class="size-card" style="--sc:${color};">
+                    <div class="label">${size}</div>
+                    <div class="row-metric"><span>% Standart</span><b>${(data.persen_standart * 100).toFixed(1)}%${arrowStandart}</b></div>
+                    <div class="row-metric"><span>% Under</span><b>${(data.persen_under * 100).toFixed(1)}%${arrowUnder}</b></div>
+                    <div class="row-metric"><span>% Over</span><b>${(data.persen_over * 100).toFixed(1)}%${arrowOver}</b></div>
+                    <div class="row-metric"><span style="color:#16a34a;">Target</span><b style="color:#16a34a;">${(data.target * 100).toFixed(0)}%</b></div>
+                    <div class="row-metric"><span>Total LB</span><b>${Number(data.total_lb).toLocaleString('id-ID')}</b></div>
+                    <div class="gap-line ${gapClass}">${gapText}</div>
+                </div>
+            `;
         }
 
         (async function init() {
