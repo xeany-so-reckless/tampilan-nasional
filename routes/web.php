@@ -33,6 +33,9 @@ Route::prefix('slaughter/uniformity')->name('slaughter.uniformity.')->group(func
         // Tren 1 plant sepanjang 12 bulan dalam 1 tahun (?plant=...&tahun=YYYY)
     Route::get('/compare-tahun', [UniformityController::class, 'compareTahun'])->name('compare-tahun');
 
+        // Perbandingan data 1 plant antara 2 minggu ISO (?plant=...&minggu[]=2026-W35&minggu[]=2026-W36)
+    Route::get('/compare-minggu', [UniformityController::class, 'compareMinggu'])->name('compare-minggu');
+
     // Ambil daftar region & plant untuk isi dropdown filter + upload
     Route::get('/filter-options', [UniformityController::class, 'filterOptions'])->name('filter-options');
 

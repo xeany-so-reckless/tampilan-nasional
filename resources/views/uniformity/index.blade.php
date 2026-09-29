@@ -329,8 +329,8 @@
                         <select id="weekSelect" class="form-select form-select-sm" style="max-width:200px; display:inline-block; margin-left:8px;" onchange="setWeek(this.value)">
                             <option value="">-- Minggu Terbaru --</option>
                         </select>
-                        <button type="button" class="btn-compare ms-2" onclick="bukaModalPerbandinganBulan()">
-                            <i class="fa-solid fa-code-compare"></i> Perbandingan Bulan
+                        <button type="button" class="btn-compare ms-2" onclick="bukaModalPerbandingan()">
+                            <i class="fa-solid fa-code-compare"></i> Perbandingan
                         </button>
                         <button type="button" class="btn-compare ms-2" onclick="bukaModalTrenSetahun()">
                             <i class="fa-solid fa-chart-line"></i> Tren Setahun
@@ -410,6 +410,7 @@
             cekKode: `{{ route('slaughter.uniformity.cek-kode') }}`,
             data: `{{ route('slaughter.uniformity.data') }}`,
             compareBulan: `{{ route('slaughter.uniformity.compare-bulan') }}`,
+            compareMinggu: `{{ route('slaughter.uniformity.compare-minggu') }}`,
             compareTahun: `{{ route('slaughter.uniformity.compare-tahun') }}`,
             filterOptions: `{{ route('slaughter.uniformity.filter-options') }}`,
             detailPage: `{{ route('slaughter.uniformity.detail-page') }}`,
@@ -443,6 +444,8 @@
         let comparisonMonthsList = [];
         // Daftar tahun yang punya data (terbaru duluan), dari filterOptions(). Contoh: [2026]
         let comparisonYearsList = [];
+        // Daftar minggu ISO yang punya data, dari filterOptions(). Contoh: [{value:"2026-W36", label:"Week 36 (31 Agu – 6 Sep 2026)"}]
+        let comparisonWeeksList = [];
         // true kalau tampilan sedang dalam mode perbandingan (bulan ATAU tahun), bukan tampilan mingguan biasa.
         let comparisonMode = false;
         // Jenis mode perbandingan yang aktif: 'bulan' atau 'tahun'.
@@ -653,6 +656,7 @@
             allPlantsByRegion = opts.all_plants_by_region || {};
             comparisonMonthsList = opts.months || [];
             comparisonYearsList = opts.years || [];
+            comparisonWeeksList = opts.iso_weeks || [];
             populateUploadPlantDropdown(allPlantsByRegion);
 
             const tabWrap = document.getElementById('regionTabs');
@@ -1176,72 +1180,88 @@
         // FITUR: PERBANDINGAN BULAN
         // ==========================================================
 
-        // Buka modal pilih 2 bulan untuk plant yang sedang aktif di dropdown (currentPlant).
-        async function bukaModalPerbandinganBulan() {
+                // Buka modal Perbandingan: pilih Bulan/Minggu, lalu pilih 2 periode untuk plant yang aktif.
+        async function bukaModalPerbandingan() {
             if (!currentPlant) {
                 Swal.fire({
                     title: 'Pilih plant dulu',
-                    text: 'Pilih salah satu plant di dropdown sebelum membuka Perbandingan Bulan.',
+                    text: 'Pilih salah satu plant di dropdown sebelum membuka Perbandingan.',
                     icon: 'warning',
                 });
                 return;
             }
 
-            if (comparisonMonthsList.length < 2) {
-                Swal.fire({
-                    title: 'Data belum cukup',
-                    text: 'Belum ada minimal 2 bulan dengan data untuk dibandingkan.',
-                    icon: 'warning',
-                });
-                return;
-            }
-
-            const monthOptionsHtml = comparisonMonthsList
-                .map(m => `<option value="${m.value}">${m.label}</option>`)
-                .join('');
-
-            const { value: formValues } = await Swal.fire({
-                title: `Perbandingan Bulan - ${currentPlant}`,
+            const { value: hasil } = await Swal.fire({
+                title: `Perbandingan - ${currentPlant}`,
                 html: `
                     <div style="text-align:left; margin-bottom:10px;">
-                        <label style="font-size:0.8rem; font-weight:600;">Bulan 1</label>
-                        <select id="swalBulan1" class="form-select form-select-sm">${monthOptionsHtml}</select>
+                        <label style="font-size:0.8rem; font-weight:600;">Bandingkan per</label>
+                        <select id="swalTipe" class="form-select form-select-sm">
+                            <option value="bulan">Bulan</option>
+                            <option value="minggu">Minggu</option>
+                        </select>
+                    </div>
+                    <div style="text-align:left; margin-bottom:10px;">
+                        <label id="swalLabel1" style="font-size:0.8rem; font-weight:600;"></label>
+                        <select id="swalPeriode1" class="form-select form-select-sm"></select>
                     </div>
                     <div style="text-align:left;">
-                        <label style="font-size:0.8rem; font-weight:600;">Bulan 2</label>
-                        <select id="swalBulan2" class="form-select form-select-sm">${monthOptionsHtml}</select>
+                        <label id="swalLabel2" style="font-size:0.8rem; font-weight:600;"></label>
+                        <select id="swalPeriode2" class="form-select form-select-sm"></select>
                     </div>
                 `,
                 didOpen: () => {
-                    // Default: Bulan 2 = bulan terbaru (comparisonMonthsList sudah urut terbaru duluan),
-                    // Bulan 1 = bulan sebelumnya kalau ada. User tetap bebas ganti keduanya.
-                    document.getElementById('swalBulan2').value = comparisonMonthsList[0].value;
-                    if (comparisonMonthsList[1]) {
-                        document.getElementById('swalBulan1').value = comparisonMonthsList[1].value;
-                    }
+                    const isiDropdown = () => {
+                        const tipe = document.getElementById('swalTipe').value;
+                        const list = tipe === 'minggu' ? comparisonWeeksList : comparisonMonthsList;
+                        const nama = tipe === 'minggu' ? 'Minggu' : 'Bulan';
+                        const optionsHtml = list.map(x => `<option value="${x.value}">${x.label}</option>`).join('');
+
+                        document.getElementById('swalLabel1').innerText = nama + ' 1';
+                        document.getElementById('swalLabel2').innerText = nama + ' 2';
+
+                        const sel1 = document.getElementById('swalPeriode1');
+                        const sel2 = document.getElementById('swalPeriode2');
+                        sel1.innerHTML = optionsHtml;
+                        sel2.innerHTML = optionsHtml;
+
+                        // Default: periode 2 = terbaru (list sudah urut terbaru duluan), periode 1 = sebelumnya
+                        if (list[0]) sel2.value = list[0].value;
+                        if (list[1]) sel1.value = list[1].value;
+                    };
+                    isiDropdown();
+                    document.getElementById('swalTipe').addEventListener('change', isiDropdown);
                 },
                 showCancelButton: true,
                 confirmButtonText: 'Bandingkan',
                 cancelButtonText: 'Batal',
                 confirmButtonColor: '#0a9396',
                 preConfirm: () => {
-                    const b1 = document.getElementById('swalBulan1').value;
-                    const b2 = document.getElementById('swalBulan2').value;
-                    if (b1 === b2) {
-                        Swal.showValidationMessage('Bulan 1 dan Bulan 2 tidak boleh sama.');
+                    const tipe = document.getElementById('swalTipe').value;
+                    const list = tipe === 'minggu' ? comparisonWeeksList : comparisonMonthsList;
+                    if (list.length < 2) {
+                        Swal.showValidationMessage(`Belum ada minimal 2 ${tipe} dengan data untuk dibandingkan.`);
                         return false;
                     }
-                    return [b1, b2];
+                    const p1 = document.getElementById('swalPeriode1').value;
+                    const p2 = document.getElementById('swalPeriode2').value;
+                    if (p1 === p2) {
+                        Swal.showValidationMessage('Pilihan 1 dan 2 tidak boleh sama.');
+                        return false;
+                    }
+                    // Format "Y-m" dan "YYYY-Www" sama-sama bisa diurutkan sebagai string,
+                    // jadi yang kiri selalu lebih lama dan yang kanan selalu lebih baru.
+                    return { tipe, periods: [p1, p2].sort() };
                 },
             });
 
-            if (!formValues) return; // user batal / validasi gagal
+            if (!hasil) return; // user batal / validasi gagal
 
-            await jalankanPerbandinganBulan(currentPlant, formValues);
+            await jalankanPerbandingan(currentPlant, hasil.tipe, hasil.periods);
         }
 
-        // Panggil endpoint compare-bulan, simpan hasilnya, lalu render tampilan comparison.
-        async function jalankanPerbandinganBulan(plant, months) {
+                // Panggil endpoint compare-bulan atau compare-minggu, simpan hasilnya, lalu render tampilan comparison.
+        async function jalankanPerbandingan(plant, tipe, periods) {
             Swal.fire({
                 title: 'Memuat data perbandingan...',
                 allowOutsideClick: false,
@@ -1251,15 +1271,20 @@
             try {
                 const params = new URLSearchParams();
                 params.set('plant', plant);
-                months.forEach(m => params.append('bulan[]', m));
+                periods.forEach(p => params.append(tipe === 'minggu' ? 'minggu[]' : 'bulan[]', p));
 
-                const res = await fetch(`${ROUTES.compareBulan}?${params.toString()}`);
+                const url = tipe === 'minggu' ? ROUTES.compareMinggu : ROUTES.compareBulan;
+                const res = await fetch(`${url}?${params.toString()}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || 'Gagal mengambil data perbandingan.');
 
+                // Endpoint minggu mengembalikan key "minggu", sedangkan fungsi render di bawah membaca "bulan".
+                // Disamakan di sini supaya renderComparisonChart/Table/SizeGroup tidak perlu diubah.
+                if (tipe === 'minggu') data.bulan = data.minggu;
+
                 comparisonResult = data;
                 comparisonMode = true;
-                comparisonType = 'bulan';
+                comparisonType = tipe; // 'bulan' atau 'minggu'
                 comparisonExpanded = false;
 
                 Swal.close();
@@ -1297,10 +1322,11 @@
         function renderComparisonView() {
             if (!comparisonResult) return;
             const [m1, m2] = comparisonResult.bulan;
+            const namaTipe = comparisonType === 'minggu' ? 'Minggu' : 'Bulan';
 
             document.getElementById('comparisonBanner').style.display = 'flex';
             document.getElementById('comparisonBannerText').innerHTML =
-                `<i class="fa-solid fa-code-compare"></i> Perbandingan Bulan &mdash; ${comparisonResult.plant}: ${m1.label} vs ${m2.label}`;
+                                `<i class="fa-solid fa-code-compare"></i> Perbandingan ${namaTipe} &mdash; ${comparisonResult.plant}: ${labelPendek(m1)} vs ${labelPendek(m2)}`;
 
             // Filter normal (region/plant/week) dinonaktifkan visual selama mode ini aktif,
             // supaya tidak membingungkan (klik region/plant/week tidak akan mengganti tampilan comparison).
@@ -1312,8 +1338,8 @@
             document.getElementById('yearSizeToggle').style.display = 'none';
             document.getElementById('thFirstCol').innerText = 'Plant';
 
-            document.getElementById('chartTitle').innerText = `${comparisonResult.plant} - Perbandingan Bulan`;
-            document.getElementById('chartScopeBadge').innerText = `${m1.label} vs ${m2.label}`;
+            document.getElementById('chartTitle').innerText = `${comparisonResult.plant} - Perbandingan ${namaTipe}`;
+            document.getElementById('chartScopeBadge').innerText = `${labelPendek(m1)} vs ${labelPendek(m2)}`;
 
             document.getElementById('infoWeek').innerText = '';
             document.getElementById('statStrip').style.display = 'none'; // stat strip mingguan tidak relevan di sini
@@ -1322,7 +1348,7 @@
             document.getElementById('statStrip').style.display = 'none';
             renderComparisonChart(m1, m2);
 
-            document.getElementById('tableCardTitle').innerText = `Detail ${comparisonResult.plant} (klik untuk lihat rincian per bulan)`;
+            document.getElementById('tableCardTitle').innerText = `Detail ${comparisonResult.plant} (klik untuk lihat rincian per ${namaTipe.toLowerCase()})`;
             document.getElementById('tableCard').style.display = 'block';
             document.getElementById('tableCard').classList.add('compare-active');
             renderComparisonTable(m1, m2);
@@ -1344,12 +1370,12 @@
             }
 
             const rawDatasets = [
-                { label: `${m1.label} - Standart`, data: seriesFor(m1, 'persen_standart'), backgroundColor: '#16a34a' },
-                { label: `${m1.label} - Under`,    data: seriesFor(m1, 'persen_under'),    backgroundColor: '#f87171' },
-                { label: `${m1.label} - Over`,     data: seriesFor(m1, 'persen_over'),     backgroundColor: '#f59e0b' },
-                { label: `${m2.label} - Standart`, data: seriesFor(m2, 'persen_standart'), backgroundColor: '#0f6b2e' },
-                { label: `${m2.label} - Under`,    data: seriesFor(m2, 'persen_under'),    backgroundColor: '#b91c1c' },
-                { label: `${m2.label} - Over`,     data: seriesFor(m2, 'persen_over'),     backgroundColor: '#b45309' },
+                { label: `${labelPendek(m1)} - Standart`, data: seriesFor(m1, 'persen_standart'), backgroundColor: '#16a34a' },
+                { label: `${labelPendek(m1)} - Under`,    data: seriesFor(m1, 'persen_under'),    backgroundColor: '#f87171' },
+                { label: `${labelPendek(m1)} - Over`,     data: seriesFor(m1, 'persen_over'),     backgroundColor: '#f59e0b' },
+                { label: `${labelPendek(m2)} - Standart`, data: seriesFor(m2, 'persen_standart'), backgroundColor: '#0f6b2e' },
+                { label: `${labelPendek(m2)} - Under`,    data: seriesFor(m2, 'persen_under'),    backgroundColor: '#b91c1c' },
+                { label: `${labelPendek(m2)} - Over`,     data: seriesFor(m2, 'persen_over'),     backgroundColor: '#b45309' },
             ];
 
             const datasets = rawDatasets.map(d => ({
@@ -1459,13 +1485,25 @@
             tbody.innerHTML = mainRow + detailRow;
         }
 
+                // Label pendek untuk legend & badge: "Week 36 (31 Agu – 6 Sep 2026)" -> "Week 36".
+        // Label bulan ("Agustus 2026") tidak punya tanda kurung, jadi tidak berubah.
+        function labelPendek(p) {
+            return p.label.split(' (')[0];
+        }
+
+        // Label lengkap untuk kartu. Di mode Minggu ditambah jumlah hari yang ada datanya
+        // (jumlah_hari hanya ada di response compare-minggu), supaya minggu yang datanya sedikit kelihatan.
+        function labelPeriode(p) {
+            return p.jumlah_hari !== undefined ? `${p.label} · ${p.jumlah_hari} hari` : p.label;
+        }
+
         function renderComparisonSizeGroup(size, m1, m2) {
             return `
                 <div class="compare-size-group">
                     <div class="compare-size-title">${size}</div>
                     <div class="size-breakdown" style="padding:0;">
-                        ${renderSizeCardLabeled(size, m1.sizes[size], m1.label)}
-                        ${renderSizeCardLabeled(size, m2.sizes[size], m2.label, m1.sizes[size])}
+                        ${renderSizeCardLabeled(size, m1.sizes[size], labelPeriode(m1))}
+                        ${renderSizeCardLabeled(size, m2.sizes[size], labelPeriode(m2), m1.sizes[size], labelPendek(m1))}
                     </div>
                 </div>
             `;
@@ -1496,7 +1534,7 @@
             return `<i class="fa-solid ${icon} trend-arrow ${cls}" title="${tooltip}"></i>`;
         }
 
-        function renderSizeCardLabeled(size, data, monthLabel, compareData) {
+            function renderSizeCardLabeled(size, data, monthLabel, compareData, compareLabel) {
             if (!data || data.total_lb === 0) {
                 return `
                     <div class="size-card" style="--sc:#94a3b8;">
@@ -1512,9 +1550,9 @@
                 : `⚠ Kurang ${Math.abs(gap * 100).toFixed(1)}% dari target`;
             const color = gap >= 0 ? '#16a34a' : '#f87171';
 
-            const arrowStandart = compareData ? trendArrowHtml(data.persen_standart, compareData.persen_standart, true) : '';
-            const arrowUnder = compareData ? trendArrowHtml(data.persen_under, compareData.persen_under, false) : '';
-            const arrowOver = compareData ? trendArrowHtml(data.persen_over, compareData.persen_over, false) : '';
+            const arrowStandart = compareData ? trendArrowHtml(data.persen_standart, compareData.persen_standart, true, compareLabel) : '';
+            const arrowUnder = compareData ? trendArrowHtml(data.persen_under, compareData.persen_under, false, compareLabel) : '';
+            const arrowOver = compareData ? trendArrowHtml(data.persen_over, compareData.persen_over, false, compareLabel) : '';
 
             return `
                 <div class="size-card" style="--sc:${color};">

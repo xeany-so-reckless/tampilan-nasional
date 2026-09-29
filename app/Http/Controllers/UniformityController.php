@@ -409,7 +409,7 @@ class UniformityController extends Controller
     }
 
     /**
-     * Perbandingan data 1 plant antara 2 bulan kalender (dipakai fitur "Perbandingan Bulan").
+     * Perbandingan data 1 plant antara 2 bulan kalender (fitur "Perbandingan" mode Bulan).
      * Sengaja dibikin endpoint terpisah dari data() karena filternya berbasis rentang
      * tanggal (whereBetween awal-akhir bulan), bukan week_label - week_label bisa nyebrang
      * bulan jadi tidak bisa dipakai buat agregasi per bulan kalender secara akurat.
@@ -500,6 +500,72 @@ class UniformityController extends Controller
         ]);
     }
 
+    /**
+     * Perbandingan data 1 plant antara 2 minggu ISO (Senin-Minggu), fitur "Perbandingan" mode Minggu.
+     * Kunci minggu berformat "YYYY-Www" (contoh "2026-W36"), pakai tahun ISO supaya minggu
+     * yang nyebrang tahun (misal 29 Des - 4 Jan) tidak tercampur dengan minggu tahun lain.
+     * Filter berdasarkan rentang tanggal, bukan week_label (week_label tidak menyimpan tahun).
+     */
+    public function compareMinggu(Request $request)
+    {
+        $request->validate([
+            'plant'    => 'required|string',
+            'minggu'   => 'required|array|min:2|max:2',
+            'minggu.*' => ['required', 'regex:/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/'],
+        ]);
+
+        $plantInfo = $this->cariPlantDiMap($request->input('plant'));
+        if (!$plantInfo) {
+            return response()->json([
+                'message' => 'Plant "' . $request->input('plant') . '" tidak ditemukan di daftar plant.',
+            ], 422);
+        }
+        $plant = $plantInfo['plant'];
+
+        $hasil = [];
+
+        foreach ($request->input('minggu') as $key) {
+            [$tahunIso, $noMinggu] = explode('-W', $key);
+            $tahunIso = (int) $tahunIso;
+            $noMinggu = (int) $noMinggu;
+
+            $awal = Carbon::now()->setISODate($tahunIso, $noMinggu, 1)->startOfDay();
+
+            // Minggu 53 di tahun yang cuma punya 52 minggu ISO akan "meluber" ke tahun berikutnya -> tolak
+            if ($awal->isoWeekYear !== $tahunIso) {
+                return response()->json([
+                    'message' => 'Minggu ' . $key . ' tidak valid (tahun ' . $tahunIso . ' tidak punya minggu ke-' . $noMinggu . ').',
+                ], 422);
+            }
+
+            $akhir = $awal->copy()->addDays(6)->endOfDay();
+
+            $agg = $this->agregasiRentang($plant, $awal, $akhir);
+
+            // Jumlah hari yang benar-benar ada datanya (untuk tanda "minggu belum lengkap" di frontend)
+            $jumlahHari = UniformityReport::where('plant', $plant)
+                ->whereBetween('tanggal', [$awal->format('Y-m-d'), $akhir->format('Y-m-d')])
+                ->distinct()
+                ->count('tanggal');
+
+            $hasil[] = [
+                'minggu'      => $key, // "2026-W36", bisa dibandingkan langsung sebagai string
+                'label'       => 'Week ' . $noMinggu . ' (' . $this->labelRentangMinggu($awal, $akhir) . ')',
+                'mulai'       => $awal->format('Y-m-d'),
+                'selesai'     => $akhir->format('Y-m-d'),
+                'jumlah_hari' => $jumlahHari,
+                'ada_data'    => $agg['ada_data'],
+                'sizes'       => $agg['sizes'],
+            ];
+        }
+
+        return response()->json([
+            'plant'  => $plant,
+            'region' => $plantInfo['region'],
+            'minggu' => $hasil,
+        ]);
+    }
+
     public function filterOptions()
     {
         $rows = UniformityReport::select('region', 'plant')->distinct()->get();
@@ -524,7 +590,7 @@ class UniformityController extends Controller
             $semuaPlant[$region] = array_column($plants, 'plant');
         }
 
-        // Daftar bulan (Y-m) yang punya data, buat dropdown Perbandingan Bulan di frontend
+        // Daftar bulan (Y-m) yang punya data, buat dropdown Perbandingan (mode Bulan) di frontend
         $tanggalList = UniformityReport::select('tanggal')->distinct()->pluck('tanggal');
 
         $monthsSet = [];
@@ -550,13 +616,34 @@ class UniformityController extends Controller
         )));
         rsort($yearsOut);
 
+        // Daftar minggu ISO yang punya data (terbaru duluan), buat dropdown Perbandingan (mode Minggu)
+        $weeksSet = [];
+        foreach ($tanggalList as $t) {
+            $d = Carbon::parse($t);
+            $key = sprintf('%d-W%02d', $d->isoWeekYear, $d->isoWeek);
+            $weeksSet[$key] = true;
+        }
+        $weekKeys = array_keys($weeksSet);
+        rsort($weekKeys);
+
+        $isoWeeksOut = array_map(function ($key) {
+            [$tahunIso, $noMinggu] = explode('-W', $key);
+            $awal  = Carbon::now()->setISODate((int) $tahunIso, (int) $noMinggu, 1)->startOfDay();
+            $akhir = $awal->copy()->addDays(6);
+            return [
+                'value' => $key,
+                'label' => 'Week ' . (int) $noMinggu . ' (' . $this->labelRentangMinggu($awal, $akhir) . ')',
+            ];
+        }, $weekKeys);
+
         return response()->json([
             'regions'              => array_keys($grouped),
             'plants_by_region'     => $grouped,
             'weeks'                => $weeks,
             'all_plants_by_region' => $semuaPlant,
             'months'               => $monthsOut,
-            'years'                => $yearsOut, // contoh: [2026]
+            'years'                => $yearsOut,     // contoh: [2026]
+            'iso_weeks'            => $isoWeeksOut,  // contoh: [{value:"2026-W36", label:"Week 36 (31 Agu – 6 Sep 2026)"}]
         ]);
     }
 
@@ -630,7 +717,7 @@ class UniformityController extends Controller
 
     /**
      * Agregasi data uniformity 1 plant pada rentang tanggal tertentu, per size.
-     * Dipakai bersama oleh compareBulan() dan compareTahun() supaya logikanya tidak dobel.
+     * Dipakai bersama oleh compareBulan(), compareTahun(), dan compareMinggu() supaya logikanya tidak dobel.
      * Persentase dihitung dari total yang dijumlahkan (weighted), bukan rata-rata persen harian.
      */
     private function agregasiRentang(string $plant, Carbon $awal, Carbon $akhir): array
@@ -754,6 +841,37 @@ class UniformityController extends Controller
             9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
         ];
         return $nama[$bulan] ?? (string) $bulan;
+    }
+
+    private function namaBulanSingkat(int $bulan): string
+    {
+        $nama = [
+            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+            7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des',
+        ];
+        return $nama[$bulan] ?? (string) $bulan;
+    }
+
+    /**
+     * Label rentang minggu yang mudah dibaca.
+     * Satu bulan  : "1 – 7 Sep 2026"
+     * Beda bulan  : "31 Agu – 6 Sep 2026" (tahun beda: "29 Des 2026 – 4 Jan 2027")
+     */
+    private function labelRentangMinggu(Carbon $awal, Carbon $akhir): string
+    {
+        $bulanAwal  = $this->namaBulanSingkat((int) $awal->format('n'));
+        $bulanAkhir = $this->namaBulanSingkat((int) $akhir->format('n'));
+
+        if ($awal->format('Y') !== $akhir->format('Y')) {
+            return $awal->format('j') . ' ' . $bulanAwal . ' ' . $awal->format('Y')
+                . ' – ' . $akhir->format('j') . ' ' . $bulanAkhir . ' ' . $akhir->format('Y');
+        }
+
+        if ($awal->format('n') !== $akhir->format('n')) {
+            return $awal->format('j') . ' ' . $bulanAwal . ' – ' . $akhir->format('j') . ' ' . $bulanAkhir . ' ' . $akhir->format('Y');
+        }
+
+        return $awal->format('j') . ' – ' . $akhir->format('j') . ' ' . $bulanAkhir . ' ' . $akhir->format('Y');
     }
 
     private function strOrNull($value)
