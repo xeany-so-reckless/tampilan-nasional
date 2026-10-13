@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UniformityController;
+use App\Http\Controllers\YieldController;
 use App\Http\Controllers\AtuController;
 
 Route::get('/', function () {
@@ -47,21 +48,29 @@ Route::prefix('slaughter/uniformity')->name('slaughter.uniformity.')->group(func
 });
 
 // // ==========================================================
-// // Slaughter House - Rekap ATU Bulanan
+// // Slaughter House - Rekap Yield Mingguan
 // // ==========================================================
-// Route::prefix('slaughter/atu')->name('slaughter.atu.')->group(function () {
+// Route::prefix('slaughter/yield')->name('slaughter.yield.')->group(function () {
 //     // Halaman utama (blade view)
-//     Route::get('/', [AtuController::class, 'index'])->name('index');
- 
-//     // Upload file Excel (1 file = 1 plant = 1 minggu, replace data plant+minggu itu)
-//     Route::post('/upload', [AtuController::class, 'upload'])->name('upload');
- 
-//     // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
-//     Route::post('/cek-kode', [AtuController::class, 'cekKode'])->name('cek-kode');
- 
-//     // Ambil data agregat untuk chart & tabel (bisa difilter ?bulan=...&tahun=...&region=...&plant=...)
-//     Route::get('/data', [AtuController::class, 'data'])->name('data');
- 
-//     // Ambil daftar region & plant untuk isi dropdown filter + upload, plus daftar bulan yang ada datanya
-//     Route::get('/filter-options', [AtuController::class, 'filterOptions'])->name('filter-options');
+//     Route::get('/', [YieldController::class, 'index'])->name('index');
 // });
+
+// ==========================================================
+// Slaughter House - Rekap ATU Bulanan
+// ==========================================================
+Route::prefix('slaughter/atu')->name('slaughter.atu.')->group(function () {
+    // Halaman utama (blade view)
+    Route::get('/', [AtuController::class, 'index'])->name('index');
+ 
+    // Upload file Excel (1 file = 1 plant = 1 minggu, replace data plant+minggu itu)
+    Route::post('/upload', [AtuController::class, 'upload'])->name('upload');
+ 
+    // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
+    Route::post('/cek-kode', [AtuController::class, 'cekKode'])->name('cek-kode');
+ 
+    // Ambil data agregat untuk chart & tabel (bisa difilter ?bulan=...&tahun=...&region=...&plant=...)
+    Route::get('/data', [AtuController::class, 'data'])->name('data');
+ 
+    // Ambil daftar region & plant untuk isi dropdown filter + upload, plus daftar bulan yang ada datanya
+    Route::get('/filter-options', [AtuController::class, 'filterOptions'])->name('filter-options');
+});
