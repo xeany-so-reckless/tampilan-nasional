@@ -239,16 +239,17 @@
                         <i class="fa-solid fa-chart-pie fs-3 text-primary"></i>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
-                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
+                {{-- <div class="col-md-4">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+                        onclick="window.location.href='{{ route('slaughter.yield.index') }}'">
+                        <span class="badge-corner badge-active-neon">Active</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Yield Mingguan</h6>
                             <small class="text-muted">Analisis persentase karkas</small>
                         </div>
                         <i class="fa-solid fa-scale-balanced fs-3 text-success"></i>
                     </div>
-                </div>
+                </div> --}}
                 <div class="col-md-4">
                     <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
                         <span class="badge-corner badge-coming-soon">Coming Soon</span>
@@ -259,7 +260,7 @@
                         <i class="fa-solid fa-truck-fast fs-3 text-warning"></i>
                     </div>
                 </div>
-                {{-- <div class="col-md-4">
+                <div class="col-md-4">
                     <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
                         onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
                         <span class="badge-corner badge-active-neon">Active</span>
@@ -269,7 +270,7 @@
                         </div>
                         <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
                     </div>
-                </div> --}}
+                </div>
             </div>
         </div>
 
