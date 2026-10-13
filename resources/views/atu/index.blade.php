@@ -219,10 +219,18 @@
         .expand-icon.open { transform: rotate(180deg); }
 
         .detail-row td { padding: 0 !important; background: var(--bg); }
-        .week-cards { display: flex; gap: 12px; padding: 16px; flex-wrap: wrap; }
+
+        /* Kartu mingguan: CSS Grid supaya semua kartu (termasuk Minggu 5 yang turun ke baris bawah)
+           selalu berukuran sama. auto-fill mempertahankan jumlah kolom, jadi kartu tidak melebar
+           walaupun di baris itu hanya ada 1 kartu. */
+        .week-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 12px;
+            padding: 16px;
+        }
         .week-card {
-            flex: 1;
-            min-width: 260px;
+            min-width: 0;
             background: #fff;
             border: 1px solid var(--line);
             border-radius: 10px;
@@ -244,7 +252,7 @@
         .mini-table td { padding: 4px; text-align: center; border-bottom: 1px dashed var(--line); }
         .mini-table td:first-child { text-align: left; color: var(--muted); }
         .mini-table tr.persen-row td { font-weight: 700; color: var(--ink); }
-        .no-week-data { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 20px; width: 100%; }
+        .no-week-data { grid-column: 1 / -1; color: var(--muted); font-size: 0.8rem; text-align: center; padding: 20px; }
     </style>
 </head>
 <body>
