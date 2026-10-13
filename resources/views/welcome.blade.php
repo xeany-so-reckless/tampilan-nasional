@@ -261,7 +261,6 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    ```html
 <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
     onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
 
