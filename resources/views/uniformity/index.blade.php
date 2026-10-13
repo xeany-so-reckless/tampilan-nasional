@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Rekap Uniformity Mingguan</title>
+    @include('partials.favicon')
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -480,7 +481,7 @@
         function mondaySundayRange(anchor) {
             const d = new Date(anchor);
             const day = d.getDay(); // 0=Minggu, 1=Senin, ... 6=Sabtu
-            const isoDay = day === 0 ? 7 : day; // 1..7, Senin=1
+            const isoDay = day  === 0 ? 7 : day; // 1..7, Senin=1
             const monday = new Date(d);
             monday.setDate(d.getDate() - (isoDay - 1));
             const sunday = new Date(monday);
@@ -1168,7 +1169,7 @@
                 uploadBadgeMap = {};
             }
 
-            // Re-render tabel yang sudah ada di layar supaya badge langsung update.
+            // Re-render tabel yang sudah ada di layar supaya badge langsung update. 
             // Kalau lagi mode Perbandingan Bulan / Tren Setahun, tabelnya beda struktur (tanpa badge),
             // jadi jangan ditimpa oleh renderPlantTable().
             if (!comparisonMode) {
