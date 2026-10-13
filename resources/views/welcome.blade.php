@@ -261,15 +261,21 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
-                        onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
-                        <span class="badge-corner badge-active-neon">Active</span>
-                        <div>
-                            <h6 class="fw-bold mb-1">Rekap Ayam ATU</h6>
-                            <small class="text-muted">Rekapitulasi Mingguan Defect Farm dan Defect Proses di Setiap Plant Slaughterhouse</small>
-                        </div>
-                        <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
-                    </div>
+                    ```html
+<div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+    onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
+
+    <span class="badge-corner badge-active-neon">Active</span>
+
+    <div>
+        <h6 class="fw-bold mb-1">Rekap Ayam ATU</h6>
+        <small class="text-muted d-block">
+            Rekapitulasi Mingguan Defect Farm dan Defect Proses di Setiap Plant Slaughterhouse
+        </small>
+    </div>
+
+    <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
+</div>
                 </div>
             </div>
         </div>
