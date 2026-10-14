@@ -24,6 +24,12 @@ class AtuController extends Controller
         9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
     ];
 
+    // Nama hari bahasa Indonesia, index mengikuti Carbon::dayOfWeek (0 = Minggu ... 6 = Sabtu)
+    private array $namaHari = [
+        0 => 'Minggu', 1 => 'Senin', 2 => 'Selasa', 3 => 'Rabu',
+        4 => 'Kamis', 5 => 'Jumat', 6 => 'Sabtu',
+    ];
+
     // Sama persis dengan plantMap() di UniformityController, supaya daftar plant konsisten
     // di semua modul Slaughter House.
     private function plantMap(): array
@@ -173,7 +179,8 @@ class AtuController extends Controller
      * tanpa kode yang benar.
      *
      * Tanggal tiap minggu dibaca dari judul blok ("Tgl. 13 sd 19 September 2026"). Kalau ada
-     * blok yang tanggalnya tidak terbaca atau rentangnya bukan 7 hari, seluruh upload ditolak.
+     * blok yang tanggalnya tidak terbaca, rentangnya bukan 7 hari, atau tidak mengikuti aturan
+     * Minggu-Sabtu, seluruh upload ditolak.
      */
     public function upload(Request $request)
     {
@@ -357,6 +364,17 @@ class AtuController extends Controller
                 throw new \RuntimeException(
                     "Blok ke-{$nomor}: rentang tanggal \"{$judulTanggal}\" bukan 7 hari "
                     . '(terbaca ' . $mulai->format('d/m/Y') . ' - ' . $selesai->format('d/m/Y') . ').'
+                );
+            }
+
+            // Aturan minggu: WAJIB mulai hari Minggu dan berakhir hari Sabtu.
+            // Kalau tidak sesuai, upload ditolak supaya Excel dibetulkan oleh pengirim.
+            if ($mulai->dayOfWeek !== Carbon::SUNDAY || $selesai->dayOfWeek !== Carbon::SATURDAY) {
+                throw new \RuntimeException(
+                    "Blok ke-{$nomor}: rentang tanggal \"{$judulTanggal}\" tidak sesuai aturan minggu Minggu-Sabtu. "
+                    . 'Terbaca ' . $this->namaHari[$mulai->dayOfWeek] . ' ' . $mulai->format('d/m/Y')
+                    . ' sampai ' . $this->namaHari[$selesai->dayOfWeek] . ' ' . $selesai->format('d/m/Y')
+                    . ' (harus mulai hari Minggu dan berakhir hari Sabtu). Mohon perbaiki tanggal di Excel lalu upload ulang.'
                 );
             }
 

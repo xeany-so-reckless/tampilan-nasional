@@ -194,10 +194,11 @@
             text-transform: uppercase;
             white-space: nowrap;
         }
+        /* Hijau kalem (tanpa glow): plant upload data HARI INI */
         .status-badge.on {
-            background: #39ff14;
-            color: #052e05;
-            box-shadow: 0 0 6px rgba(57,255,20,.75), 0 0 14px rgba(57,255,20,.35);
+            background: rgba(16,185,129,.14);
+            color: #047857;
+            box-shadow: none;
         }
         .status-badge.off {
             background: #e2e8f0;
@@ -346,7 +347,7 @@
 
         <div class="table-card p-3" id="tableCard" style="display:none;">
             <h6 class="fw-bold mb-1">Detail per Plant (klik baris untuk lihat rincian per minggu)</h6>
-            <div class="small text-muted mb-3">Kolom AK/AM/AB/AJ = % Defect Farm per size. % ATU = total satu plant (semua size). Badge UPDATE = plant punya data di bulan terpilih.</div>
+            <div class="small text-muted mb-3">Kolom AK/AM/AB/AJ = % Defect Farm per size. % ATU = total satu plant (semua size). Badge UPDATE = plant upload data hari ini. Badge TIDAK ADA DATA = plant belum punya data di bulan terpilih.</div>
             <table class="atu-table">
                 <thead>
                     <tr>
@@ -778,23 +779,29 @@
             return { labels, rentang, series };
         }
 
-        // Kelompokkan baris jadi per plant: %Defect Farm per size + %ATU total plant (agregat sebulan).
+        // Kelompokkan baris jadi per plant: %Defect Farm per size + %ATU total plant (agregat sebulan)
+        // + waktu upload terakhir plant itu (dari created_at, dipakai untuk badge UPDATE hari ini).
         // ATU di Excel berlaku untuk seluruh plant (bukan per size), jadi dihitung dari total ATU / total LB semua size.
         function groupByPlantSize(rows) {
             const bucket = {};
             rows.forEach(r => {
-                if (!bucket[r.plant]) bucket[r.plant] = { sizes: {}, lb: 0, atuEkor: 0 };
+                if (!bucket[r.plant]) bucket[r.plant] = { sizes: {}, lb: 0, atuEkor: 0, lastUpload: null };
                 const b = bucket[r.plant];
                 if (!b.sizes[r.size]) b.sizes[r.size] = { lb: 0, farmEkor: 0 };
                 b.sizes[r.size].lb += Number(r.jumlah_lb || 0);
                 b.sizes[r.size].farmEkor += Number(r.defect_farm_ekor || 0);
                 b.lb += Number(r.jumlah_lb || 0);
                 b.atuEkor += Number(r.atu_ekor || 0);
+
+                if (r.created_at) {
+                    const t = new Date(r.created_at).getTime();
+                    if (!isNaN(t) && (b.lastUpload === null || t > b.lastUpload)) b.lastUpload = t;
+                }
             });
             const map = {};
             Object.keys(bucket).forEach(plant => {
                 const b = bucket[plant];
-                map[plant] = { sizes: {}, persen_atu: b.lb > 0 ? b.atuEkor / b.lb : 0 };
+                map[plant] = { sizes: {}, persen_atu: b.lb > 0 ? b.atuEkor / b.lb : 0, lastUpload: b.lastUpload };
                 Object.keys(b.sizes).forEach(size => {
                     const x = b.sizes[size];
                     map[plant].sizes[size] = { persen_farm: x.lb > 0 ? x.farmEkor / x.lb : 0 };
@@ -1356,12 +1363,24 @@
             return `<span class="pct-chip">${pct}%</span>`;
         }
 
-        // Badge status per plant: UPDATE (hijau neon) kalau punya data di bulan terpilih,
-        // TIDAK ADA DATA (abu-abu) kalau tidak ada sama sekali.
-        function statusBadge(hasData) {
-            return hasData
-                ? `<span class="status-badge on">Update</span>`
-                : `<span class="status-badge off">Tidak ada data</span>`;
+        // Apakah waktu (timestamp ms) jatuh di tanggal kalender HARI INI (zona waktu perangkat pengguna)?
+        function isToday(ts) {
+            if (ts === null || ts === undefined) return false;
+            const d = new Date(ts);
+            const n = new Date();
+            return d.getFullYear() === n.getFullYear()
+                && d.getMonth() === n.getMonth()
+                && d.getDate() === n.getDate();
+        }
+
+        // Badge status per plant:
+        //  - TIDAK ADA DATA (abu-abu): plant belum punya data di bulan terpilih
+        //  - UPDATE (hijau kalem): upload terakhir plant terjadi HARI INI
+        //  - tanpa badge: punya data, tapi upload terakhirnya hari-hari sebelumnya
+        function statusBadge(hasData, updatedToday) {
+            if (!hasData) return `<span class="status-badge off">Tidak ada data</span>`;
+            if (updatedToday) return `<span class="status-badge on">Update</span>`;
+            return '';
         }
 
         function renderPlantTable(plantMap) {
@@ -1377,10 +1396,11 @@
             }
 
             tbody.innerHTML = allPlants.map((plant, plantIdx) => {
-                const plantData = plantMap[plant] || { sizes: {}, persen_atu: null };
+                const plantData = plantMap[plant] || { sizes: {}, persen_atu: null, lastUpload: null };
                 const sizes = plantData.sizes;
                 const isExpanded = expandedPlants.has(plant);
                 const hasData = Object.keys(sizes).length > 0;
+                const updatedToday = hasData && isToday(plantData.lastUpload);
 
                 const mainRow = `
                     <tr class="plant-row" onclick="togglePlantRow('${plant.replace(/'/g, "\\'")}')">
@@ -1390,7 +1410,7 @@
                                     <i class="fa-solid fa-chevron-down expand-icon ${isExpanded ? 'open' : ''}"></i>
                                     ${plant}
                                 </span>
-                                ${statusBadge(hasData)}
+                                ${statusBadge(hasData, updatedToday)}
                             </div>
                         </td>
                         ${SIZE_ORDER.map(sz => `<td>${sizes[sz] ? pctChip(sizes[sz].persen_farm) : '-'}</td>`).join('')}
