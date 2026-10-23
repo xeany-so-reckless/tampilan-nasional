@@ -240,18 +240,17 @@
                         <i class="fa-solid fa-chart-pie fs-3 text-primary"></i>
                     </div>
                 </div>
-                {{-- <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
-                        onclick="window.location.href='{{ route('slaughter.yield.index') }}'">
-                        <span class="badge-corner badge-active-neon">Active</span>
+                <div class="col-md-4">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
+                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Yield Mingguan</h6>
                             <small class="text-muted">Analisis persentase karkas</small>
                         </div>
                         <i class="fa-solid fa-scale-balanced fs-3 text-success"></i>
                     </div>
-                </div> --}}
-                <div class="col-md-4">
+                </div>
+                {{-- <div class="col-md-4">
                     <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
                         <span class="badge-corner badge-coming-soon">Coming Soon</span>
                         <div>
@@ -260,25 +259,25 @@
                         </div>
                         <i class="fa-solid fa-truck-fast fs-3 text-warning"></i>
                     </div>
-                </div>
+                </div> --}}
                 <div class="col-md-4">
-<div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
-    onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+                        onclick="window.location.href='{{ route('slaughter.atu.index') }}'">
 
-    <span class="badge-corner badge-active-neon">Active</span>
+                        <span class="badge-corner badge-active-neon">Active</span>
 
-    <div>
-        <h6 class="fw-bold mb-1">Rekap Ayam ATU</h6>
-        <small class="text-muted d-block">
-            Rekapitulasi Mingguan Defect Farm dan Defect Proses di Setiap Plant Slaughterhouse
-        </small>
+                        <div>
+                            <h6 class="fw-bold mb-1">Rekap Ayam ATU</h6>
+                            <small class="text-muted d-block">
+                                Rekapitulasi Mingguan Defect Farm dan Defect Proses di Setiap Plant Slaughterhouse
+                            </small>
+                        </div>
+
+        <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
     </div>
-
-    <i class="fa-solid fa-drumstick-bite fs-3" style="color: orange;"></i>
-</div>
+                    </div>
                 </div>
             </div>
-        </div>
 
         <div id="content-further" class="content-section">
             <h4 class="fw-bold mb-4 text-secondary"><i class="fa-solid fa-gear"></i> Modul Further Processing</h4>
