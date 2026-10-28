@@ -335,15 +335,17 @@
                         <select id="weekSelect" class="form-select form-select-sm" style="max-width:200px; display:inline-block; margin-left:8px;" onchange="setWeek(this.value)">
                             <option value="">-- Minggu Terbaru --</option>
                         </select>
-                        <button type="button" class="btn-compare ms-2" onclick="bukaModalPerbandingan()">
+                    </div>
+                    <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn-compare" onclick="bukaModalPerbandingan()">
                             <i class="fa-solid fa-code-compare"></i> Perbandingan
                         </button>
-                        <button type="button" class="btn-compare ms-2" onclick="bukaModalTrenSetahun()">
+                        <button type="button" class="btn-compare" onclick="bukaModalTrenSetahun()">
                             <i class="fa-solid fa-chart-line"></i> Tren Setahun
                         </button>
                         <a href="{{ asset('templates/Template_Uniformity.xls') }}"
                         download="Template_Uniformity.xls"
-                        class="btn-compare ms-2 text-decoration-none">
+                        class="btn-compare text-decoration-none">
                             <i class="fa-solid fa-download"></i> Download Template
                         </a>
                     </div>
