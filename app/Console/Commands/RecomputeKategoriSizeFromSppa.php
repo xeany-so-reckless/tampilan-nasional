@@ -199,27 +199,28 @@ class RecomputeKategoriSizeFromSppa extends Command
         $this->newLine(2);
     }
 
-    /**
+        /**
      * HARUS identik dengan UniformityController::hitungKategoriSize().
      * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: 2.20-2.59 | ASJ: >=2.60
+     * Batas AK/AM/AB memakai pola lama (<=) supaya data historis tidak bergeser.
      */
     private function hitungKategoriSize(?float $beratKg): ?string
     {
         if ($beratKg === null || $beratKg <= 0) {
             return null;
         }
-        if ($beratKg < 1.40) {
+        if ($beratKg <= 1.39) {
             return 'AK';
         }
-        if ($beratKg < 1.80) {
+        if ($beratKg <= 1.79) {
             return 'AM';
         }
-        if ($beratKg < 2.20) {
+        if ($beratKg <= 2.19) {
             return 'AB';
         }
-        if ($beratKg < 2.60) {
+        if ($beratKg <= 2.59) {
             return 'AJ';
         }
-        return 'ASJ'; // 2.60 ke atas, tanpa batas atas
+        return 'ASJ'; // di atas 2.59, tanpa batas atas
     }
 }
