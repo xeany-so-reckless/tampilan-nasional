@@ -341,6 +341,11 @@
                         <button type="button" class="btn-compare ms-2" onclick="bukaModalTrenSetahun()">
                             <i class="fa-solid fa-chart-line"></i> Tren Setahun
                         </button>
+                        <a href="{{ asset('templates/Template_Uniformity.xls') }}"
+                        download="Template_Uniformity.xls"
+                        class="btn-compare ms-2 text-decoration-none">
+                            <i class="fa-solid fa-download"></i> Download Template
+                        </a>
                     </div>
                 </div>
 
