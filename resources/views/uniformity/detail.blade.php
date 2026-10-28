@@ -133,6 +133,7 @@
                         <label><input type="checkbox" class="chk-kategori" value="AM" checked onchange="reloadDetail()"> AM</label>
                         <label><input type="checkbox" class="chk-kategori" value="AB" checked onchange="reloadDetail()"> AB</label>
                         <label><input type="checkbox" class="chk-kategori" value="AJ" checked onchange="reloadDetail()"> AJ</label>
+                        <label><input type="checkbox" class="chk-kategori" value="ASJ" checked onchange="reloadDetail()"> ASJ</label>
                     </div>
                 </div>
             </div>
@@ -153,7 +154,7 @@
             detail: `{{ route('slaughter.uniformity.detail') }}`,
         };
 
-        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
+        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ', 'ASJ'];
 
         // Ambil plant & rentang tanggal default dari query string URL (dikirim dari halaman utama)
         const urlParams = new URLSearchParams(window.location.search);
@@ -207,7 +208,7 @@
                 document.getElementById('detailContent').innerHTML = '';
                 document.getElementById('emptyState').style.display = 'block';
                 document.querySelector('#emptyState p.fw-semibold').innerText = 'Tidak ada kategori size dipilih.';
-                document.querySelector('#emptyState p.small').innerText = 'Centang minimal satu kategori (AK/AM/AB/AJ) untuk menampilkan data.';
+                document.querySelector('#emptyState p.small').innerText = 'Centang minimal satu kategori (AK/AM/AB/AJ/ASJ) untuk menampilkan data.';
                 return;
             }
 

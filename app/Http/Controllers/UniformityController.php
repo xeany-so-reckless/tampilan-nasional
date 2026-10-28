@@ -12,8 +12,9 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class UniformityController extends Controller
 {
-    // Urutan size yang dipakai (dihitung dari "Rata-rata RPA", bukan dibaca dari Excel)
-    private array $sizeOrder = ['AK', 'AM', 'AB', 'AJ'];
+    // Urutan size yang dipakai (dihitung dari "Rata-rata SPPA", bukan dibaca dari Excel)
+    // AK = ayam kecil, AM = medium, AB = besar, AJ = jumbo, ASJ = super jumbo
+    private array $sizeOrder = ['AK', 'AM', 'AB', 'AJ', 'ASJ'];
 
     // Baris pertama data batch di sheet Excel format baru (row 1-4 = judul & header)
     private int $dataStartRow = 5;
@@ -808,23 +809,30 @@ class UniformityController extends Controller
 
     /**
      * Hitung kategori size dari berat rata-rata (kolom "Rata-rata SPPA", dalam Kg).
-     * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: >=2.20
+     * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: 2.20-2.59 | ASJ: >=2.60
+     *
+     * Pakai pola "< batas atas" (bukan "<= 1.39" dst) supaya nilai desimal seperti
+     * 2.595 tidak lolos ke kategori di atasnya. Fungsi yang sama HARUS dipakai di
+     * command uniformity:recompute-kategori.
      */
     private function hitungKategoriSize(?float $beratKg): ?string
     {
         if ($beratKg === null || $beratKg <= 0) {
             return null;
         }
-        if ($beratKg <= 1.39) {
+        if ($beratKg < 1.40) {
             return 'AK';
         }
-        if ($beratKg <= 1.79) {
+        if ($beratKg < 1.80) {
             return 'AM';
         }
-        if ($beratKg <= 2.19) {
+        if ($beratKg < 2.20) {
             return 'AB';
         }
-        return 'AJ'; // 2.20 ke atas, tanpa batas atas
+        if ($beratKg < 2.60) {
+            return 'AJ';
+        }
+        return 'ASJ'; // 2.60 ke atas, tanpa batas atas
     }
 
     private function weekLabelFromDate(string $tanggal): string

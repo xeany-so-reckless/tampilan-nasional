@@ -136,7 +136,7 @@
         /* Filter normal (region/plant/week) di-nonaktifkan visual saat mode Perbandingan aktif */
         .filters-disabled { pointer-events: none; opacity: 0.5; }
 
-        /* Tombol pilih size (Semua / AK / AM / AB / AJ) di atas chart mode Tren Setahun */
+        /* Tombol pilih size (Semua / AK / AM / AB / AJ / ASJ) di atas chart mode Tren Setahun */
         .size-toggle {
             display: flex;
             flex-wrap: wrap;
@@ -315,6 +315,11 @@
                 <div class="stat-value" id="statAJ">-</div>
                 <div class="stat-sub" id="statSubAJ"></div>
             </div>
+            <div class="stat-box" id="statBoxASJ">
+                <div class="stat-label">% LB Standart ASJ</div>
+                <div class="stat-value" id="statASJ">-</div>
+                <div class="stat-sub" id="statSubASJ"></div>
+            </div>
         </div>
 
         <div class="toolbar-card mb-4">
@@ -370,6 +375,7 @@
                 <button type="button" data-size="AM" onclick="setYearSize('AM')">AM</button>
                 <button type="button" data-size="AB" onclick="setYearSize('AB')">AB</button>
                 <button type="button" data-size="AJ" onclick="setYearSize('AJ')">AJ</button>
+                <button type="button" data-size="ASJ" onclick="setYearSize('ASJ')">ASJ</button>
             </div>
 
             <div id="chartWrapper">
@@ -393,6 +399,7 @@
                         <th>AM</th>
                         <th>AB</th>
                         <th>AJ</th>
+                        <th>ASJ</th>
                         <th class="col-aksi">Aksi</th>
                     </tr>
                 </thead>
@@ -458,14 +465,14 @@
 
         // State khusus Tren Setahun
         let yearResult = null;               // hasil terakhir endpoint compare-tahun
-        let yearSize = 'ALL';                // 'ALL' = line chart 4 size, atau 'AK'/'AM'/'AB'/'AJ' = batang per size
+        let yearSize = 'ALL';                // 'ALL' = bar 5 size, atau 'AK'/'AM'/'AB'/'AJ'/'ASJ' = batang per size
 
-        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
+        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ', 'ASJ'];
         const TARGET_DEFAULT = 0.8;
         const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
         const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
         // Warna garis per size di line chart Tren Setahun (sengaja beda dari hijau/merah/oranye batang)
-        const SIZE_LINE_COLORS = { AK: '#2563eb', AM: '#9333ea', AB: '#0d9488', AJ: '#db2777' };
+        const SIZE_LINE_COLORS = { AK: '#2563eb', AM: '#9333ea', AB: '#0d9488', AJ: '#db2777', ASJ: '#334155' };
 
         // Durasi satu siklus denyut glow badge UPDATE (detik) - harus sama dengan di CSS (neonPulse)
         const BADGE_PULSE_SECONDS = 1.8;
@@ -778,6 +785,7 @@
         }
 
         // Gabungkan banyak baris jadi total per size (dipakai utk chart ringkasan)
+        // total_lb ikut dikembalikan supaya size tanpa data (mis. ASJ) bisa ditampilkan "-" / celah, bukan 0%.
         function aggregateBySize(rows) {
             const bucket = {};
             SIZE_ORDER.forEach(sz => bucket[sz] = { total_lb: 0, lb_standart: 0, lb_under: 0, lb_over: 0, target: TARGET_DEFAULT });
@@ -797,6 +805,7 @@
                 const total = b.total_lb;
                 return {
                     size: sz,
+                    total_lb: total,
                     persen_standart: total > 0 ? b.lb_standart / total : 0,
                     persen_under: total > 0 ? b.lb_under / total : 0,
                     persen_over: total > 0 ? b.lb_over / total : 0,
@@ -822,16 +831,18 @@
             });
 
             // Tahap 2: baru hitung persentase dari hasil akumulasi
+            // Size yang total_lb-nya 0 TIDAK dimasukkan, supaya tabel menampilkan "-" (bukan chip 0% merah)
             const map = {};
             Object.keys(bucket).forEach(plant => {
                 map[plant] = {};
                 Object.keys(bucket[plant]).forEach(size => {
                     const b = bucket[plant][size];
                     const total = b.total_lb;
+                    if (total <= 0) return;
                     map[plant][size] = {
-                        persen_standart: total > 0 ? b.lb_standart / total : 0,
-                        persen_under: total > 0 ? b.lb_under / total : 0,
-                        persen_over: total > 0 ? b.lb_over / total : 0,
+                        persen_standart: b.lb_standart / total,
+                        persen_under: b.lb_under / total,
+                        persen_over: b.lb_over / total,
                         target: b.target,
                     };
                 });
@@ -939,13 +950,21 @@
         function updateStatStrip(agg) {
             const scopeLabel = currentPlant ? currentPlant : (currentRegion ? currentRegion : 'Nasional');
             agg.forEach(a => {
-                const pct = (a.persen_standart * 100).toFixed(1);
                 const box = document.getElementById('statBox' + a.size);
                 const val = document.getElementById('stat' + a.size);
                 const sub = document.getElementById('statSub' + a.size);
                 if (!box || !val) return;
 
                 box.classList.remove('ok', 'warn', 'danger');
+
+                // Size tanpa data di scope/minggu ini: tampil "-", bukan 0% merah
+                if (!a.total_lb || a.total_lb <= 0) {
+                    val.innerText = '-';
+                    sub.innerText = scopeLabel + ' \u00b7 Tidak ada data';
+                    return;
+                }
+
+                const pct = (a.persen_standart * 100).toFixed(1);
                 box.classList.add(statusClass(a.persen_standart));
                 val.innerText = pct + '%';
                 sub.innerText = scopeLabel + ' \u00b7 Target ' + (a.target * 100).toFixed(0) + '%';
@@ -957,11 +976,14 @@
             const labels = agg.map(a => a.size);
             const targetPct = (agg[0]?.target ?? TARGET_DEFAULT) * 100;
 
+            // Size tanpa data (total_lb 0) diberi null supaya batang tidak digambar sebagai 0%
+            const val = (a, key) => (a.total_lb > 0 ? Number((a[key] * 100).toFixed(1)) : null);
+
             const datasets = [
                 {
                     type: 'bar',
                     label: '% Standart',
-                    data: agg.map(a => Number((a.persen_standart * 100).toFixed(1))),
+                    data: agg.map(a => val(a, 'persen_standart')),
                     backgroundColor: '#16a34a',
                     borderRadius: 6,
                     datalabels: { anchor: 'end', align: 'top', color: '#16a34a', font: { weight: 'bold', size: 11 } },
@@ -969,7 +991,7 @@
                 {
                     type: 'bar',
                     label: '% Under',
-                    data: agg.map(a => Number((a.persen_under * 100).toFixed(1))),
+                    data: agg.map(a => val(a, 'persen_under')),
                     backgroundColor: '#f87171',
                     borderRadius: 6,
                     datalabels: { anchor: 'end', align: 'top', color: '#b91c1c', font: { weight: 'bold', size: 11 } },
@@ -977,7 +999,7 @@
                 {
                     type: 'bar',
                     label: '% Over',
-                    data: agg.map(a => Number((a.persen_over * 100).toFixed(1))),
+                    data: agg.map(a => val(a, 'persen_over')),
                     backgroundColor: '#f59e0b',
                     borderRadius: 6,
                     datalabels: { anchor: 'end', align: 'top', color: '#b45309', font: { weight: 'bold', size: 11 } },
@@ -1020,7 +1042,7 @@
                     plugins: {
                         legend: { position: 'bottom' },
                         datalabels: {
-                            formatter: (v) => v + '%',
+                            formatter: (v) => (v === null || v === undefined ? '' : v + '%'),
                         },
                     },
                     scales: {
@@ -1066,7 +1088,7 @@
             const plantNames = Object.keys(plantMap).sort();
 
             if (plantNames.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
                 return;
             }
 
@@ -1093,7 +1115,7 @@
 
                 const detailRow = isExpanded ? `
                     <tr class="detail-row">
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="size-breakdown">
                                 ${SIZE_ORDER.map(sz => renderSizeCard(sz, sizes[sz])).join('')}
                             </div>
@@ -1355,7 +1377,7 @@
             renderComparisonTable(m1, m2);
         }
 
-        // Grouped bar chart: 4 size di X-axis, 6 dataset (Standart/Under/Over x 2 bulan).
+        // Grouped bar chart: 5 size di X-axis, 6 dataset (Standart/Under/Over x 2 bulan).
         // Size yang total_lb-nya 0 (tidak ada data bulan itu) dikasih nilai null supaya
         // Chart.js tidak menggambar bar-nya sama sekali (bukan digambar sebagai 0%).
         function renderComparisonChart(m1, m2) {
@@ -1475,7 +1497,7 @@
 
             const detailRow = comparisonExpanded ? `
                 <tr class="detail-row">
-                    <td colspan="7">
+                    <td colspan="8">
                         <div style="padding:14px 16px; display:flex; flex-direction:column; gap:14px;">
                             ${SIZE_ORDER.map(sz => renderComparisonSizeGroup(sz, m1, m2)).join('')}
                         </div>
@@ -1679,7 +1701,7 @@
             renderYearTable();
         }
 
-        // Ganti size yang ditampilkan di chart (tanpa request ulang, data 12 bulan x 4 size sudah dimuat).
+        // Ganti size yang ditampilkan di chart (tanpa request ulang, data 12 bulan x 5 size sudah dimuat).
         function setYearSize(size) {
             yearSize = size;
             syncYearSizeToggle();
@@ -1738,7 +1760,7 @@
         }
 
         // Chart Tren Setahun:
-        // - yearSize 'ALL': line chart 4 garis (AK, AM, AB, AJ), metrik % Standart saja.
+        // - yearSize 'ALL': batang per size (AK, AM, AB, AJ, ASJ), metrik % Standart saja.
         // - yearSize satu size: batang, 3 batang per bulan (Standart hijau, Under merah, Over oranye).
         function renderYearChart() {
             if (!yearResult) return;
@@ -1757,23 +1779,23 @@
             let chartType;
 
             if (isAll) {
-    chartType = 'bar';
-    datasets = SIZE_ORDER.map(sz => ({
-        type: 'bar',
-        label: sz,
-        data: bulanArr.map(b => yearValue(b, sz, 'persen_standart')),
-        backgroundColor: SIZE_LINE_COLORS[sz],
-        borderRadius: 3,
-        _size: sz,
-        datalabels: {
-            anchor: 'end',
-            align: 'top',
-            color: SIZE_LINE_COLORS[sz],
-            font: { weight: 'bold', size: 8 },
-            formatter: (v) => (v === null || v === undefined ? '' : v + '%'),
-        },
-    }));
-} else {
+                chartType = 'bar';
+                datasets = SIZE_ORDER.map(sz => ({
+                    type: 'bar',
+                    label: sz,
+                    data: bulanArr.map(b => yearValue(b, sz, 'persen_standart')),
+                    backgroundColor: SIZE_LINE_COLORS[sz],
+                    borderRadius: 3,
+                    _size: sz,
+                    datalabels: {
+                        anchor: 'end',
+                        align: 'top',
+                        color: SIZE_LINE_COLORS[sz],
+                        font: { weight: 'bold', size: 8 },
+                        formatter: (v) => (v === null || v === undefined ? '' : v + '%'),
+                    },
+                }));
+            } else {
                 chartType = 'bar';
                 const metrics = [
                     { key: 'persen_standart', label: '% Standart', bg: '#16a34a', text: '#16a34a' },
@@ -1830,7 +1852,6 @@
                     plugins: {
                         legend: { position: 'bottom' },
                         tooltip: { callbacks: tooltipCallbacks },
-                        // Mode garis: label angka permanen ditiadakan (4 garis akan saling tumpuk), angka ada di tooltip & tabel.
                         datalabels: {},
                     },
                     scales: {
@@ -1851,7 +1872,7 @@
         }
 
         // Tabel Tren Setahun: semua bulan langsung tampil berurutan (tanpa expand/collapse).
-        // - Bulan yang punya data: 1 baris bulan (chip % Standart) + 4 kartu rincian per size di bawahnya.
+        // - Bulan yang punya data: 1 baris bulan (chip % Standart) + 5 kartu rincian per size di bawahnya.
         // - Bulan kosong: 1 baris saja bertuliskan "Tidak ada data".
         // Panah tren tiap bulan dibandingkan dengan bulan TERAKHIR yang punya data (bukan sekadar bulan kalender sebelumnya).
         function renderYearTable() {
@@ -1864,7 +1885,7 @@
                     return `
                         <tr class="month-row">
                             <td>${b.label}</td>
-                            <td colspan="4" class="text-muted small">Tidak ada data</td>
+                            <td colspan="7" class="text-muted small">Tidak ada data</td>
                         </tr>
                     `;
                 }
@@ -1891,7 +1912,7 @@
                         <td class="col-aksi"></td>
                     </tr>
                     <tr class="detail-row">
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="size-breakdown">${cards}</div>
                         </td>
                     </tr>
