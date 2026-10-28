@@ -807,12 +807,12 @@ class UniformityController extends Controller
         }
     }
 
-    /**
+        /**
      * Hitung kategori size dari berat rata-rata (kolom "Rata-rata SPPA", dalam Kg).
      * AK: <1.40 | AM: 1.40-1.79 | AB: 1.80-2.19 | AJ: 2.20-2.59 | ASJ: >=2.60
      *
-     * Pakai pola "< batas atas" (bukan "<= 1.39" dst) supaya nilai desimal seperti
-     * 2.595 tidak lolos ke kategori di atasnya. Fungsi yang sama HARUS dipakai di
+     * Batas AK/AM/AB sengaja memakai pola lama (<= 1.39, <= 1.79, <= 2.19) supaya
+     * hasil kategori data historis tidak bergeser. Fungsi yang sama HARUS dipakai di
      * command uniformity:recompute-kategori.
      */
     private function hitungKategoriSize(?float $beratKg): ?string
@@ -820,19 +820,19 @@ class UniformityController extends Controller
         if ($beratKg === null || $beratKg <= 0) {
             return null;
         }
-        if ($beratKg < 1.40) {
+        if ($beratKg <= 1.39) {
             return 'AK';
         }
-        if ($beratKg < 1.80) {
+        if ($beratKg <= 1.79) {
             return 'AM';
         }
-        if ($beratKg < 2.20) {
+        if ($beratKg <= 2.19) {
             return 'AB';
         }
-        if ($beratKg < 2.60) {
+        if ($beratKg <= 2.59) {
             return 'AJ';
         }
-        return 'ASJ'; // 2.60 ke atas, tanpa batas atas
+        return 'ASJ'; // di atas 2.59, tanpa batas atas
     }
 
     private function weekLabelFromDate(string $tanggal): string
