@@ -149,7 +149,16 @@
             border-radius: var(--radius-sm);
             font-weight: 600;
         }
-        .btn-upload:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+                .btn-upload:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+
+        .btn-template {
+            border: 1px solid var(--line);
+            color: var(--muted);
+            background: #fff;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+        }
+        .btn-template:hover { border-color: var(--accent); color: var(--accent); background: #fff; }
 
         .form-select, .form-control { border-radius: var(--radius-sm); border-color: var(--line); color: var(--ink); }
         .form-select:focus, .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -158,6 +167,10 @@
         .empty-state i { font-size: 3rem; margin-bottom: 14px; display: block; color: #cbd5e1; }
 
         .info-period { font-size: 0.85rem; color: var(--muted); }
+
+        /* Catatan kapan ASJ mulai tercatat (tampil di semua bulan, supaya orang tahu kenapa ASJ lama kosong) */
+        .asj-note { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+        .asj-note i { color: var(--accent); margin-right: 4px; }
 
         table.atu-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
         table.atu-table thead th {
@@ -295,11 +308,16 @@
                     <div id="regionTabs">
                         <button class="tab-region active" data-region="" onclick="setRegion('', this)">Nasional</button>
                     </div>
-                    <div class="mt-2">
-                        <select id="plantSelect" class="form-select form-select-sm" style="max-width:280px; display:inline-block;" onchange="setPlant(this.value)">
+                                        <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                        <select id="plantSelect" class="form-select form-select-sm" style="width:260px; max-width:100%;" onchange="setPlant(this.value)">
                             <option value="">-- Semua Plant --</option>
                         </select>
-                        <input type="month" id="monthSelect" class="form-control form-control-sm" style="max-width:170px; display:inline-block; margin-left:8px;" onchange="setMonth(this.value)">
+                        <div class="d-flex flex-nowrap align-items-center gap-2">
+                            <input type="month" id="monthSelect" class="form-control form-control-sm" style="width:170px;" onchange="setMonth(this.value)">
+                            <a href="{{ asset('templates/template_ATU.xls') }}" download="Template_ATU.xls" class="btn btn-template btn-sm text-nowrap">
+                                <i class="fa-solid fa-file-arrow-down"></i> Download Template
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -316,6 +334,7 @@
                 </div>
             </div>
             <div class="info-period mt-2" id="infoPeriod"></div>
+            <div class="asj-note" id="asjNote" style="display:none;"></div>
         </div>
 
         <div class="chart-card mb-4">
@@ -333,6 +352,7 @@
                             <button class="size-pill" data-size="AM" onclick="setSize('AM', this)">AM</button>
                             <button class="size-pill" data-size="AB" onclick="setSize('AB', this)">AB</button>
                             <button class="size-pill" data-size="AJ" onclick="setSize('AJ', this)">AJ</button>
+                            <button class="size-pill" data-size="ASJ" onclick="setSize('ASJ', this)">ASJ</button>
                         </div>
                     </div>
                     <div class="chart-box"><canvas id="fxCanvas" class="fx-canvas"></canvas><canvas id="chartOverview"></canvas></div>
@@ -347,7 +367,7 @@
 
         <div class="table-card p-3" id="tableCard" style="display:none;">
             <h6 class="fw-bold mb-1">Detail per Plant (klik baris untuk lihat rincian per minggu)</h6>
-            <div class="small text-muted mb-3">Kolom AK/AM/AB/AJ = % Defect Farm per size. % ATU = total satu plant (semua size). Badge UPDATE = plant upload data hari ini. Badge TIDAK ADA DATA = plant belum punya data di bulan terpilih.</div>
+            <div class="small text-muted mb-3">Kolom AK/AM/AB/AJ/ASJ = % Defect Farm per size. % ATU = total satu plant (semua size). Badge UPDATE = plant upload data hari ini. Badge TIDAK ADA DATA = plant belum punya data di bulan terpilih.</div>
             <table class="atu-table">
                 <thead>
                     <tr>
@@ -356,6 +376,7 @@
                         <th>AM</th>
                         <th>AB</th>
                         <th>AJ</th>
+                        <th>ASJ</th>
                         <th>% ATU</th>
                     </tr>
                 </thead>
@@ -387,6 +408,10 @@
 
         let plantsByRegion = {};
         let allPlantsByRegion = {};
+                // Tanggal bawaan "ASJ mulai tercatat" (minggu pertama template baru), dipakai selama belum ada data ASJ di database.
+        // Ubah kalau tanggal mulainya berbeda.
+        const ASJ_MULAI_DEFAULT = '2026-10-05';
+        let asjMulai = null;                // tanggal mulai minggu paling awal yang punya data ASJ (Y-m-d), dari filterOptions
         let chartOverviewInstance = null;   // chart atas (Farm & Proses)
         let detailCharts = {};              // chart per size di detail plant: { [plant]: { farm, proses } }
         let currentChartRows = [];          // baris untuk chart atas (mengikuti filter plant)
@@ -396,9 +421,9 @@
         let pendingKodeOtorisasi = '';
         let trendToken = 0; // mencegah hasil lama menimpa hasil baru saat filter cepat berganti
 
-        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ'];
+        const SIZE_ORDER = ['AK', 'AM', 'AB', 'AJ', 'ASJ'];
         // Satu warna selalu berarti satu size, di kedua grafik
-        const SIZE_COLORS = { AK: '#6366f1', AM: '#10b981', AB: '#0ea5e9', AJ: '#ec4899' };
+        const SIZE_COLORS = { AK: '#6366f1', AM: '#10b981', AB: '#0ea5e9', AJ: '#ec4899', ASJ: '#f97316' };
         // Warna chart atas: Farm merah, Proses oranye (sama dengan kartu statistik)
         const OVERVIEW_COLORS = { farm: '#ef4444', proses: '#f59e0b' };
         const JAWA_REGIONS = ['Banten', 'Jabar', 'Jateng', 'Jatim'];
@@ -418,6 +443,18 @@
 
         function escapeHtml(v) {
             return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Catatan "ASJ mulai tercatat dari ...", tampil di semua bulan selama sudah ada data ASJ
+        function renderAsjNote() {
+            const el = document.getElementById('asjNote');
+            if (!asjMulai) {
+                el.style.display = 'none';
+                el.innerHTML = '';
+                return;
+            }
+            el.innerHTML = `<i class="fa-solid fa-circle-info"></i> ASJ mulai tercatat dari minggu ${escapeHtml(formatDateFull(asjMulai))}. Data sebelum itu belum memisahkan ASJ (masih tergabung di AJ).`;
+            el.style.display = 'block';
         }
 
         function getSelectedUploadPlantLabel() {
@@ -500,6 +537,7 @@
                         ${formatDateFull(m.tanggal_mulai)} &ndash; ${formatDateFull(m.tanggal_selesai)}
                         &rarr; <b>${escapeHtml(m.bulan_nama)}</b>
                         ${m.akan_ditimpa ? '<span class="badge bg-warning text-dark ms-1">menimpa data lama</span>' : ''}
+                        ${m.ada_asj === false ? '<span class="badge bg-secondary ms-1">tanpa kolom ASJ</span>' : ''}
                     </li>`).join('') +
                 `</ul>`;
         }
@@ -529,12 +567,14 @@
 
                 const pratinjau = await kirimFileAtu(file, plant, kodeOtorisasi, false);
                 const adaTimpa = pratinjau.minggu.some(m => m.akan_ditimpa);
+                const adaTanpaAsj = pratinjau.minggu.some(m => m.ada_asj === false);
 
                 const konfirmasi = await Swal.fire({
                     title: `Simpan data Plant ${escapeHtml(plantLabel)}?`,
                     html: `<div>Terbaca <b>${pratinjau.minggu.length} minggu</b> di file ini:</div>` +
                         daftarMingguHtml(pratinjau.minggu) +
-                        (adaTimpa ? `<div class="small text-muted mt-3">Minggu bertanda kuning sudah punya data dan akan diganti dengan isi file ini.</div>` : ''),
+                        (adaTimpa ? `<div class="small text-muted mt-3">Minggu bertanda kuning sudah punya data dan akan diganti dengan isi file ini.</div>` : '') +
+                        (adaTanpaAsj ? `<div class="small text-muted mt-2">Minggu bertanda abu-abu tidak punya kolom ASJ (template lama), jadi ASJ tidak tercatat dan ayam super jumbo masih tergabung di AJ. Pakai template terbaru kalau ingin ASJ terpisah.</div>` : ''),
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: 'Simpan',
@@ -581,6 +621,8 @@
             const opts = await res.json();
             plantsByRegion = opts.plants_by_region || {};
             allPlantsByRegion = opts.all_plants_by_region || {};
+            asjMulai = opts.asj_mulai || ASJ_MULAI_DEFAULT;
+            renderAsjNote();
             populateUploadPlantDropdown(allPlantsByRegion);
 
             const tabWrap = document.getElementById('regionTabs');
@@ -782,6 +824,8 @@
         // Kelompokkan baris jadi per plant: %Defect Farm per size + %ATU total plant (agregat sebulan)
         // + waktu upload terakhir plant itu (dari created_at, dipakai untuk badge UPDATE hari ini).
         // ATU di Excel berlaku untuk seluruh plant (bukan per size), jadi dihitung dari total ATU / total LB semua size.
+        // Size yang total LB-nya 0 (mis. ASJ di plant yang tidak punya ayam super jumbo) tidak dimasukkan,
+        // supaya tabel menampilkan "-" dan bukan chip 0,0%.
         function groupByPlantSize(rows) {
             const bucket = {};
             rows.forEach(r => {
@@ -804,7 +848,9 @@
                 map[plant] = { sizes: {}, persen_atu: b.lb > 0 ? b.atuEkor / b.lb : 0, lastUpload: b.lastUpload };
                 Object.keys(b.sizes).forEach(size => {
                     const x = b.sizes[size];
-                    map[plant].sizes[size] = { persen_farm: x.lb > 0 ? x.farmEkor / x.lb : 0 };
+                    if (x.lb > 0) {
+                        map[plant].sizes[size] = { persen_farm: x.farmEkor / x.lb };
+                    }
                 });
             });
             return map;
@@ -1391,7 +1437,7 @@
             destroyDetailCharts();
 
             if (allPlants.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">Tidak ada plant terdaftar untuk region ini.</td></tr>`;
                 return;
             }
 
@@ -1420,7 +1466,7 @@
 
                 const detailRow = isExpanded ? `
                     <tr class="detail-row">
-                        <td colspan="6">
+                        <td colspan="7">
                             ${renderDetailChartsForPlant(plant, plantIdx)}
                             <div class="week-cards">
                                 ${renderWeekCardsForPlant(plant)}
@@ -1473,7 +1519,7 @@
                 return `<div class="no-week-data">Belum ada data ATU untuk plant ini di periode terpilih.</div>`;
             }
             return weeks.map(w => {
-                // ATU & Total RM Defect+ATU berlaku untuk seluruh plant (sel gabungan di Excel)
+                // ATU & Total RM Defect+ATU berlaku untuk seluruh plant (diisi di kolom D saja di Excel)
                 const sizeRows = Object.values(w.sizes);
                 const totalLb = sizeRows.reduce((a, r) => a + Number(r.jumlah_lb || 0), 0);
                 const atuEkor = sizeRows.reduce((a, r) => a + Number(r.atu_ekor || 0), 0);
@@ -1491,8 +1537,8 @@
                         <tbody>
                             <tr><td>Defect Farm (ekor)</td>${SIZE_ORDER.map(sz => `<td>${fmtNum(w.sizes[sz]?.defect_farm_ekor)}</td>`).join('')}</tr>
                             <tr><td>Defect Proses (ekor)</td>${SIZE_ORDER.map(sz => `<td>${fmtNum(w.sizes[sz]?.defect_proses_ekor)}</td>`).join('')}</tr>
-                            <tr class="persen-row"><td>% ATU</td><td colspan="4">${fmtPct(atuPersen)}</td></tr>
-                            <tr class="persen-row"><td>% Total Defect+ATU</td><td colspan="4">${fmtPct(totalPersen)}</td></tr>
+                            <tr class="persen-row"><td>% ATU</td><td colspan="5">${fmtPct(atuPersen)}</td></tr>
+                            <tr class="persen-row"><td>% Total Defect+ATU</td><td colspan="5">${fmtPct(totalPersen)}</td></tr>
                         </tbody>
                     </table>
                 </div>

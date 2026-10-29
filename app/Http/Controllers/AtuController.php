@@ -12,11 +12,12 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class AtuController extends Controller
 {
-    // Urutan size, sesuai kolom D-G di template Excel ATU
-    private array $sizeOrder = ['AK', 'AM', 'AB', 'AJ'];
+    // Urutan size, sesuai kolom D-H di template Excel ATU
+    // AK = ayam kecil, AM = medium, AB = besar, AJ = jumbo, ASJ = super jumbo
+    private array $sizeOrder = ['AK', 'AM', 'AB', 'AJ', 'ASJ'];
 
-    // Kolom Excel per size
-    private array $kolomSize = ['AK' => 'D', 'AM' => 'E', 'AB' => 'F', 'AJ' => 'G'];
+    // Kolom Excel per size. ASJ (kolom H) hanya ada di template baru; file lama tanpa ASJ tetap bisa diupload.
+    private array $kolomSize = ['AK' => 'D', 'AM' => 'E', 'AB' => 'F', 'AJ' => 'G', 'ASJ' => 'H'];
 
     private array $namaBulan = [
         1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
@@ -178,9 +179,14 @@ class AtuController extends Controller
      * Kode otorisasi divalidasi di KEDUA tahap, jadi tahap simpan tidak bisa dipanggil langsung
      * tanpa kode yang benar.
      *
-     * Tanggal tiap minggu dibaca dari judul blok ("Tgl. 13 sd 19 September 2026"). Kalau ada
-     * blok yang tanggalnya tidak terbaca, rentangnya bukan 7 hari, atau tidak mengikuti aturan
-     * Minggu-Sabtu, seluruh upload ditolak.
+     * Tanggal tiap minggu dibaca dari judul blok. Format yang didukung:
+     *  - template baru : "Week 41, Tgl 05-10-2026 sd 11-10-2026" (Senin-Minggu)
+     *  - template lama : "Tgl. 13 sd 19 September 2026"          (Minggu-Sabtu)
+     * Kalau ada blok yang tanggalnya tidak terbaca, rentangnya bukan 7 hari, atau bukan pola
+     * Senin-Minggu / Minggu-Sabtu, seluruh upload ditolak.
+     *
+     * Kolom ASJ (H) opsional: kalau file tidak punya kolom ASJ (template lama), baris ASJ
+     * tidak disimpan sama sekali, sehingga di tampilan jadi "tidak ada data", bukan 0%.
      */
     public function upload(Request $request)
     {
@@ -222,6 +228,7 @@ class AtuController extends Controller
                     'bulan'           => $blok['bulan'],
                     'tahun'           => $blok['tahun'],
                     'bulan_nama'      => $this->namaBulan[$blok['bulan']] . ' ' . $blok['tahun'],
+                    'ada_asj'         => $blok['ada_asj'],
                     'akan_ditimpa'    => AtuReport::where('plant', $plant)
                         ->where('tanggal_mulai', $blok['mulai']->format('Y-m-d'))
                         ->where('tanggal_selesai', $blok['selesai']->format('Y-m-d'))
@@ -244,7 +251,7 @@ class AtuController extends Controller
                     $mulai   = $blok['mulai']->format('Y-m-d');
                     $selesai = $blok['selesai']->format('Y-m-d');
 
-                    // Replace data lama untuk plant + minggu ini saja, supaya upload ulang tidak duplikat
+                    // Replace data lama untuk plant + minggu ini saja (semua size), supaya upload ulang tidak duplikat
                     AtuReport::where('plant', $plant)
                         ->where('tanggal_mulai', $mulai)
                         ->where('tanggal_selesai', $selesai)
@@ -252,11 +259,16 @@ class AtuController extends Controller
 
                     $rows = [];
                     foreach ($this->sizeOrder as $index => $size) {
+                        // File tanpa kolom ASJ (template lama): jangan simpan baris ASJ
+                        if ($size === 'ASJ' && !$blok['ada_asj']) {
+                            continue;
+                        }
+
                         $m = $blok['per_size'][$size];
                         $pertama = ($index === 0);
 
-                        // ATU & Total RM Defect+ATU = sel gabungan D:G di Excel (berlaku utk seluruh plant,
-                        // bukan per size). Disimpan di baris AK saja; AM/AB/AJ diisi 0 supaya penjumlahan
+                        // ATU & Total RM Defect+ATU berlaku untuk seluruh plant (diisi di kolom D saja,
+                        // bukan per size). Disimpan di baris AK saja; size lain diisi 0 supaya penjumlahan
                         // di frontend tidak ganda.
                         $rows[] = [
                             'week_label'              => $blok['week_label'],
@@ -343,17 +355,11 @@ class AtuController extends Controller
             $nomor = $i + 1;
             $akhir = isset($awalBlok[$i + 1]) ? $awalBlok[$i + 1] - 1 : $barisMax;
 
-            // 2) Tanggal dari judul ("Tgl. ... sd ...") - dicari di beberapa baris pertama blok
-            $judulTanggal = null;
-            for ($r = $awal + 1; $r <= min($awal + 3, $akhir); $r++) {
-                $teks = $this->strOrNull($sheet->getCell('B' . $r)->getCalculatedValue());
-                if ($teks !== null && stripos($teks, 'Tgl') !== false) {
-                    $judulTanggal = $teks;
-                    break;
-                }
-            }
+            // 2) Tanggal dari judul ("Tgl ... sd ...") - dicari di beberapa baris pertama blok,
+            //    di kolom B sampai H (template lama: kolom B; template baru: kolom D)
+            $judulTanggal = $this->cariJudulTanggal($sheet, $awal, $akhir);
             if ($judulTanggal === null) {
-                throw new \RuntimeException("Blok ke-{$nomor}: judul tanggal (\"Tgl. ... sd ...\") tidak ditemukan.");
+                throw new \RuntimeException("Blok ke-{$nomor}: judul tanggal (\"Tgl ... sd ...\") tidak ditemukan.");
             }
 
             [$mulai, $selesai] = $this->parseRentangTanggal($judulTanggal, $nomor);
@@ -367,14 +373,17 @@ class AtuController extends Controller
                 );
             }
 
-            // Aturan minggu: WAJIB mulai hari Minggu dan berakhir hari Sabtu.
+            // Aturan minggu: Senin-Minggu (template baru) ATAU Minggu-Sabtu (template lama).
             // Kalau tidak sesuai, upload ditolak supaya Excel dibetulkan oleh pengirim.
-            if ($mulai->dayOfWeek !== Carbon::SUNDAY || $selesai->dayOfWeek !== Carbon::SATURDAY) {
+            $polaSeninMinggu = $mulai->dayOfWeek === Carbon::MONDAY && $selesai->dayOfWeek === Carbon::SUNDAY;
+            $polaMingguSabtu = $mulai->dayOfWeek === Carbon::SUNDAY && $selesai->dayOfWeek === Carbon::SATURDAY;
+            if (!$polaSeninMinggu && !$polaMingguSabtu) {
                 throw new \RuntimeException(
-                    "Blok ke-{$nomor}: rentang tanggal \"{$judulTanggal}\" tidak sesuai aturan minggu Minggu-Sabtu. "
+                    "Blok ke-{$nomor}: rentang tanggal \"{$judulTanggal}\" tidak sesuai aturan minggu. "
                     . 'Terbaca ' . $this->namaHari[$mulai->dayOfWeek] . ' ' . $mulai->format('d/m/Y')
                     . ' sampai ' . $this->namaHari[$selesai->dayOfWeek] . ' ' . $selesai->format('d/m/Y')
-                    . ' (harus mulai hari Minggu dan berakhir hari Sabtu). Mohon perbaiki tanggal di Excel lalu upload ulang.'
+                    . ' (harus mulai hari Senin dan berakhir hari Minggu; file lama boleh Minggu sampai Sabtu). '
+                    . 'Mohon perbaiki tanggal di Excel lalu upload ulang.'
                 );
             }
 
@@ -408,9 +417,28 @@ class AtuController extends Controller
                 }
             }
 
-            // 4) Baca angka per size (kolom D-G)
+            // Kolom ASJ (H) dianggap ada hanya kalau header di baris "Size" bertuliskan ASJ.
+            // File lama (tanpa ASJ) -> false, dan baris ASJ tidak disimpan.
+            $adaAsj = false;
+            if (isset($barisMetrik['header_size'])) {
+                $headerH = mb_strtolower(trim((string) $sheet->getCell($this->kolomSize['ASJ'] . $barisMetrik['header_size'])->getCalculatedValue()));
+                $adaAsj  = ($headerH === 'asj');
+            }
+
+            // 4) Baca angka per size (kolom D-H)
             $perSize = [];
             foreach ($this->sizeOrder as $size) {
+                if ($size === 'ASJ' && !$adaAsj) {
+                    $perSize[$size] = [
+                        'jumlah_lb'            => 0.0,
+                        'defect_farm_ekor'     => 0.0,
+                        'defect_farm_persen'   => 0.0,
+                        'defect_proses_ekor'   => 0.0,
+                        'defect_proses_persen' => 0.0,
+                    ];
+                    continue;
+                }
+
                 $kolom = $this->kolomSize[$size];
                 $ambil = fn (string $k) => $this->numOrNull($sheet->getCell($kolom . $barisMetrik[$k])->getCalculatedValue()) ?? 0.0;
 
@@ -423,7 +451,7 @@ class AtuController extends Controller
                 ];
             }
 
-            // 5) Baris ATU & Total = sel gabungan, nilainya hanya di kolom D
+            // 5) Baris ATU & Total = satu angka per plant, nilainya hanya di kolom D
             $bacaD = fn (string $k) => $this->numOrNull($sheet->getCell('D' . $barisMetrik[$k])->getCalculatedValue()) ?? 0.0;
             $levelPlant = [
                 'atu_ekor'                => $bacaD('atu_ekor'),
@@ -444,6 +472,7 @@ class AtuController extends Controller
                 'selesai'     => $selesai,
                 'bulan'       => $bulan,
                 'tahun'       => $tahun,
+                'ada_asj'     => $adaAsj,
                 'per_size'    => $perSize,
                 'plant_level' => $levelPlant,
             ];
@@ -453,13 +482,47 @@ class AtuController extends Controller
     }
 
     /**
+     * Cari teks judul tanggal ("... Tgl ... sd ...") di beberapa baris pertama sebuah blok,
+     * memeriksa kolom B sampai H. Template lama menaruhnya di kolom B, template baru di kolom D.
+     */
+    private function cariJudulTanggal($sheet, int $awal, int $akhir): ?string
+    {
+        for ($r = $awal + 1; $r <= min($awal + 3, $akhir); $r++) {
+            foreach (['B', 'C', 'D', 'E', 'F', 'G', 'H'] as $kolom) {
+                $teks = $this->strOrNull($sheet->getCell($kolom . $r)->getCalculatedValue());
+                if ($teks !== null && stripos($teks, 'Tgl') !== false) {
+                    return $teks;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Baca rentang tanggal dari judul blok. Format yang didukung:
+     *  - "Week 41, Tgl 05-10-2026 sd 11-10-2026"    (template baru, dd-mm-yyyy)
      *  - "Tgl. 13 sd 19 September 2026"            (bulan hanya di akhir)
      *  - "Tgl.27 September sd 03 Oktober 2026"      (lintas bulan)
      *  - "Tgl.29 Desember 2025 sd 03 Januari 2026"  (lintas tahun)
      */
     private function parseRentangTanggal(string $judul, int $nomorBlok): array
     {
+        // Format numerik dd-mm-yyyy sd dd-mm-yyyy (pemisah "-", "/" atau ".")
+        $polaNumerik = '/Tgl\.?\s*(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})\s*(?:sd|s\/d)\s*(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/iu';
+        if (preg_match($polaNumerik, $judul, $n)) {
+            [$hariMulai, $bulanMulai, $tahunMulai] = [(int) $n[1], (int) $n[2], (int) $n[3]];
+            [$hariAkhir, $bulanAkhir, $tahunAkhir] = [(int) $n[4], (int) $n[5], (int) $n[6]];
+
+            if (!checkdate($bulanMulai, $hariMulai, $tahunMulai) || !checkdate($bulanAkhir, $hariAkhir, $tahunAkhir)) {
+                throw new \RuntimeException("Blok ke-{$nomorBlok}: tanggal pada judul \"{$judul}\" tidak valid.");
+            }
+
+            return [
+                Carbon::create($tahunMulai, $bulanMulai, $hariMulai)->startOfDay(),
+                Carbon::create($tahunAkhir, $bulanAkhir, $hariAkhir)->startOfDay(),
+            ];
+        }
+
         $pola = '/Tgl\.?\s*(\d{1,2})(?:\s+([A-Za-z]+))?(?:\s+(\d{4}))?\s+sd\s+(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/iu';
 
         if (!preg_match($pola, $judul, $m)) {
@@ -527,6 +590,7 @@ class AtuController extends Controller
         if ($label === '') {
             return null;
         }
+        if ($label === 'size') return 'header_size'; // baris header AK/AM/AB/AJ/ASJ
         if (str_starts_with($label, 'jumlah lb')) return 'jumlah_lb';
         if (str_starts_with($label, '% defect farm')) return 'defect_farm_persen';
         if (str_starts_with($label, 'defect farm')) return 'defect_farm_ekor';
@@ -565,7 +629,8 @@ class AtuController extends Controller
 
     /**
      * Daftar region & plant (untuk dropdown filter + upload), dan daftar bulan/tahun
-     * yang sudah ada datanya.
+     * yang sudah ada datanya. Juga "asj_mulai": tanggal mulai minggu paling awal yang
+     * punya baris ASJ (null kalau belum ada), untuk catatan "ASJ mulai tercatat dari ..." di frontend.
      */
     public function filterOptions()
     {
@@ -596,11 +661,14 @@ class AtuController extends Controller
             $semuaPlant[$region] = array_column($plants, 'plant');
         }
 
+        $asjMulai = AtuReport::where('size', 'ASJ')->min('tanggal_mulai');
+
         return response()->json([
             'regions'              => array_keys($grouped),
             'plants_by_region'     => $grouped,
             'bulan_tersedia'       => $bulanTersedia,
             'all_plants_by_region' => $semuaPlant,
+            'asj_mulai'            => $asjMulai ? substr((string) $asjMulai, 0, 10) : null,
         ]);
     }
 
