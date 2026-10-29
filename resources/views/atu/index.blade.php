@@ -410,7 +410,7 @@
         let allPlantsByRegion = {};
                 // Tanggal bawaan "ASJ mulai tercatat" (minggu pertama template baru), dipakai selama belum ada data ASJ di database.
         // Ubah kalau tanggal mulainya berbeda.
-        const ASJ_MULAI_DEFAULT = '2026-10-05';
+        const ASJ_MULAI_DEFAULT = '2026-10-29';
         let asjMulai = null;                // tanggal mulai minggu paling awal yang punya data ASJ (Y-m-d), dari filterOptions
         let chartOverviewInstance = null;   // chart atas (Farm & Proses)
         let detailCharts = {};              // chart per size di detail plant: { [plant]: { farm, proses } }
@@ -453,7 +453,7 @@
                 el.innerHTML = '';
                 return;
             }
-            el.innerHTML = `<i class="fa-solid fa-circle-info"></i> ASJ mulai tercatat dari minggu ${escapeHtml(formatDateFull(asjMulai))}. Data sebelum itu belum memisahkan ASJ (masih tergabung di AJ).`;
+            el.innerHTML = `<i class="fa-solid fa-circle-info"></i> ASJ mulai tercatat dari ${escapeHtml(formatDateFull(asjMulai))}. Data sebelum itu belum memisahkan ASJ (masih tergabung di AJ).`;
             el.style.display = 'block';
         }
 
