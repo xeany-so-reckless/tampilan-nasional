@@ -241,8 +241,9 @@
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between disabled">
-                        <span class="badge-corner badge-coming-soon">Coming Soon</span>
+                    <div class="menu-card p-4 h-100 d-flex align-items-center justify-content-between"
+                        onclick="window.location.href='{{ route('slaughter.yield.index') }}'">
+                        <span class="badge-corner badge-active-neon">Active</span>
                         <div>
                             <h6 class="fw-bold mb-1">Rekap Yield Mingguan</h6>
                             <small class="text-muted">Analisis persentase karkas</small>

@@ -47,13 +47,26 @@ Route::prefix('slaughter/uniformity')->name('slaughter.uniformity.')->group(func
     Route::get('/detail', [UniformityController::class, 'detail'])->name('detail');
 });
 
-// // ==========================================================
-// // Slaughter House - Rekap Yield Mingguan
-// // ==========================================================
-// Route::prefix('slaughter/yield')->name('slaughter.yield.')->group(function () {
-//     // Halaman utama (blade view)
-//     Route::get('/', [YieldController::class, 'index'])->name('index');
-// });
+// ==========================================================
+// Slaughter House - Rekap Yield Harian
+// ==========================================================
+Route::prefix('slaughter/yield')->name('slaughter.yield.')->group(function () {
+    // Halaman utama (blade view)
+    Route::get('/', [YieldController::class, 'index'])->name('index');
+
+    // Upload file Excel (1 file = 1 plant = 1 hari, replace data plant+tanggal itu)
+    // Dua tahap: simpan=0 -> pratinjau saja, simpan=1 -> simpan
+    Route::post('/upload', [YieldController::class, 'upload'])->name('upload');
+
+    // Cek kode otorisasi plant SEBELUM file picker dibuka (dipanggil dari modal SweetAlert)
+    Route::post('/cek-kode', [YieldController::class, 'cekKode'])->name('cek-kode');
+
+    // Ambil data mentah per hari untuk chart & tabel (bisa difilter ?bulan=...&tahun=...&region=...&plant=...)
+    Route::get('/data', [YieldController::class, 'data'])->name('data');
+
+    // Ambil daftar region & plant untuk isi dropdown filter + upload, plus daftar bulan yang ada datanya
+    Route::get('/filter-options', [YieldController::class, 'filterOptions'])->name('filter-options');
+});
 
 // ==========================================================
 // Slaughter House - Rekap ATU Bulanan
