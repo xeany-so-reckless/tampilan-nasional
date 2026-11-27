@@ -34,55 +34,55 @@ class YieldController extends Controller
     // Baris header per blok hari di template
     private const BARIS_PLANT   = 2;   // nama plant
     private const BARIS_TANGGAL = 3;   // tanggal laporan
-    private const BARIS_JENIS   = 4;   // "ALL" / "Super Jumbo" / "Jumbo" / "Non Jumbo"
+    private const BARIS_JENIS   = 4;   // header "Qty (Kg)" / "%"
     private const KOLOM_AWAL    = 3;   // kolom C (blok hari pertama mulai dari sini)
+    private const BARIS_BERAT_BERSIH = 12;
 
     /**
      * Peta kolom database -> [nomor baris, sisi] di template Excel Yield.
      * sisi 0 = kolom Qty (Kg), sisi 1 = kolom % (tepat di kanan kolom Qty).
      *
-     * Satu file bisa berisi banyak hari: tiap hari adalah satu blok kolom (ALL, Super Jumbo,
-     * Jumbo, Non Jumbo). Yang dibaca hanya kolom "ALL" tiap blok, posisinya dicari otomatis
-     * dari header baris 4, jadi nomor baris di sini sama untuk semua hari.
+     * Satu file bisa berisi banyak hari: tiap hari adalah 2 kolom (Qty dan %).
+     * Posisinya dicari otomatis dari header "Qty (Kg)" di baris 4, jadi nomor baris di sini sama untuk semua hari.
      * Kalau ada baris yang bergeser, pengecekan label (lihat $labelWajib) akan menolak upload.
      */
     private array $petaBaris = [
         // Livebirds
-        'sppa_lb_ekor'       => [7, 0],
-        'sppa_lb_kg'         => [8, 0],
-        'abw'                => [9, 0],
-        'ayam_mati_ekor'     => [10, 0],
-        'susut_kg'           => [11, 0],
-        'susut_persen'       => [12, 0],
-        'berat_bersih'       => [13, 0],
+        'sppa_lb_ekor'       => [6, 0],
+        'sppa_lb_kg'         => [7, 0],
+        'abw'                => [8, 0],
+        'ayam_mati_ekor'     => [9, 0],
+        'susut_kg'           => [10, 0],
+        'susut_persen'       => [11, 0],
+        'berat_bersih'       => [12, 0],
         // RM Input Griller (H0) = titik nol
-        'rm_h0_kg'           => [15, 0],
-        'rm_h0_persen'       => [15, 1],
+        'rm_h0_kg'           => [14, 0],
+        'rm_h0_persen'       => [14, 1],
         // H1 Griller
-        'rm_griller_kg'      => [18, 0],
-        'h1_kg'              => [19, 0],
-        'h1_persen'          => [19, 1],
+        'rm_griller_kg'      => [17, 0],
+        'h1_kg'              => [23, 0],
+        'h1_persen'          => [23, 1],
         // H2 Parting
-        'rm_parting_kg'      => [27, 0],
-        'h2_kg'              => [33, 0],
-        'h2_persen'          => [33, 1],
+        'rm_parting_kg'      => [26, 0],
+        'h2_kg'              => [32, 0],
+        'h2_persen'          => [32, 1],
         // H3 Cut Up
-        'rm_cutup_kg'        => [36, 0],
-        'h3_kg'              => [44, 0],
-        'h3_persen'          => [44, 1],
+        'rm_cutup_kg'        => [35, 0],
+        'h3_kg'              => [43, 0],
+        'h3_persen'          => [43, 1],
         // H4 Boneless
-        'rm_boneless_kg'     => [47, 0],
-        'h4_kg'              => [54, 0],
-        'h4_persen'          => [54, 1],
+        'rm_boneless_kg'     => [46, 0],
+        'h4_kg'              => [53, 0],
+        'h4_persen'          => [53, 1],
         // Total
-        'fg_bp_kg'           => [57, 0],
-        'fg_bp_persen'       => [57, 1],
-        'bp_evisc_kg'        => [58, 0],
-        'bp_evisc_persen'    => [58, 1],
-        'final_yield_kg'     => [59, 0],
-        'final_yield_persen' => [59, 1],
-        'lost_kg'            => [60, 0],
-        'lost_persen'        => [60, 1],
+        'fg_bp_kg'           => [56, 0],
+        'fg_bp_persen'       => [56, 1],
+        'bp_evisc_kg'        => [57, 0],
+        'bp_evisc_persen'    => [57, 1],
+        'final_yield_kg'     => [58, 0],
+        'final_yield_persen' => [58, 1],
+        'lost_kg'            => [59, 0],
+        'lost_persen'        => [59, 1],
     ];
 
     /**
@@ -91,26 +91,27 @@ class YieldController extends Controller
      * kalau baris template bergeser/berubah, upload ditolak daripada membaca angka dari baris yang salah.
      */
     private array $labelWajib = [
-        7  => 'SPPA LB (EKOR)',
-        8  => 'SPPA LB (KG)',
-        9  => 'ABW',
-        10 => 'AYAM MATI',
-        11 => 'SUSUT KG',
-        12 => 'SUSUT %',
-        13 => 'BERAT BERSIH',
-        15 => 'RM Input Griller',
-        18 => 'RM Griller (H1)',
-        19 => 'H1',
-        27 => 'RM Parting (H2)',
-        33 => 'H2',
-        36 => 'RM Cut Up (H3)',
-        44 => 'H3',
-        47 => 'RM Boneless (H4)',
-        54 => 'RM Boneless (H4)',
-        57 => 'Grand Total Qty FG+BP',
-        58 => 'BP EVISC',
-        59 => 'YIELD FG TOTAL',
-        60 => 'Lost',
+        6 => 'SPPA LB (EKOR)',
+        7 => 'SPPA LB (KG)',
+        8 => 'ABW',
+        9 => 'AYAM MATI',
+        10 => 'SUSUT KG',
+        11 => 'SUSUT %',
+        12 => 'BERAT BERSIH',
+        14 => 'RM Input Griller',
+        17 => 'RM Griller (H1)',
+        18 => 'H1',
+        24 => 'Yield h1 thd Titik 0',
+        26 => 'RM Parting (H2)',
+        32 => 'H2',
+        35 => 'RM Cut Up (H3)',
+        43 => 'H3',
+        46 => 'RM Boneless (H4)',
+        53 => 'RM Boneless (H4)',
+        56 => 'Grand Total Qty FG+BP',
+        57 => 'BP EVISC',
+        58 => 'YIELD FG TOTAL',
+        59 => 'Lost',
     ];
 
     // Sama persis dengan plantMap() di AtuController / UniformityController, supaya daftar plant
@@ -431,17 +432,17 @@ class YieldController extends Controller
                 );
             }
 
-            // 3) Cari semua blok hari: kolom yang header baris 4-nya "ALL"
+            // 3) Cari semua blok hari: kolom yang header baris 4-nya "Qty (Kg)"
             $kolomTerakhir = Coordinate::columnIndexFromString($sheet->getHighestColumn());
             $blokKolom = [];
             for ($k = self::KOLOM_AWAL; $k <= $kolomTerakhir; $k++) {
                 $jenis = $this->normalisasiLabel($this->nilaiSel($sheet, Coordinate::stringFromColumnIndex($k) . self::BARIS_JENIS));
-                if ($jenis === 'all') {
+                if (str_starts_with($jenis, 'qty')) {
                     $blokKolom[] = $k;
                 }
             }
             if (count($blokKolom) === 0) {
-                throw new \RuntimeException('Kolom hari tidak ditemukan. Pastikan header "ALL" ada di baris ' . self::BARIS_JENIS . ' (mulai kolom C).');
+                throw new \RuntimeException('Kolom hari tidak ditemukan. Pastikan header "Qty (Kg)" ada di baris ' . self::BARIS_JENIS . ' (mulai kolom C).');
             }
 
             // 4) Baca & validasi tiap blok hari
@@ -485,7 +486,7 @@ class YieldController extends Controller
     }
 
     /**
-     * Baca 1 blok hari (kolom ALL: Qty di $kolomQty, % di kolom sebelah kanannya).
+     * Baca 1 blok hari (Qty di $kolomQty, % di kolom sebelah kanannya).
      *
      * Mengembalikan salah satu:
      *  - ['dilewati' => 'alasan']                      blok kosong (tanpa tanggal / tanpa data produksi)
@@ -513,7 +514,7 @@ class YieldController extends Controller
         $label = "Kolom {$huruf} (" . $tanggal->format('d/m/Y') . ')';
 
         // Berat Bersih kosong / error / 0 = hari tanpa produksi, dilewati (bukan error)
-        $rawBB = $this->nilaiSel($sheet, $alamat(0, 13));
+        $rawBB = $this->nilaiSel($sheet, $alamat(0, self::BARIS_BERAT_BERSIH));
         if ($rawBB === null || $rawBB === '' || $this->selError($rawBB) || (is_numeric($rawBB) && (float) $rawBB <= 0)) {
             return ['dilewati' => "{$label}: tidak ada data produksi (Berat Bersih kosong/0)"];
         }
@@ -537,22 +538,22 @@ class YieldController extends Controller
 
             // Cek silang
             if ($nilai['berat_bersih'] <= 0) {
-                throw new \RuntimeException('Berat Bersih (' . $alamat(0, 13) . ') bernilai 0, artinya tidak ada data produksi.');
+                throw new \RuntimeException('Berat Bersih (' . $alamat(0, self::BARIS_BERAT_BERSIH) . ') bernilai 0, artinya tidak ada data produksi.');
             }
 
             $totalKomponen = $nilai['fg_bp_kg'] + $nilai['bp_evisc_kg'];
             if (abs($nilai['final_yield_kg'] - $totalKomponen) > self::TOLERANSI_KG) {
                 throw new \RuntimeException(
-                    'Yield FG Total (' . $alamat(0, 59) . ' = ' . number_format($nilai['final_yield_kg'], 2, ',', '.') . ' kg) tidak sama dengan FG+BP (' . $alamat(0, 57)
-                    . ') + BP Evisc (' . $alamat(0, 58) . ') = ' . number_format($totalKomponen, 2, ',', '.') . ' kg. Periksa rumus di Excel.'
+                    'Yield FG Total (' . $alamat(0, 58) . ' = ' . number_format($nilai['final_yield_kg'], 2, ',', '.') . ' kg) tidak sama dengan FG+BP (' . $alamat(0, 56)
+                    . ') + BP Evisc (' . $alamat(0, 57) . ') = ' . number_format($totalKomponen, 2, ',', '.') . ' kg. Periksa rumus di Excel.'
                 );
             }
 
             $cekPersen = [
-                ['rm_h0_kg',       'rm_h0_persen',       'RM Input Griller (H0)', 15],
-                ['fg_bp_kg',       'fg_bp_persen',       'FG + BP',               57],
-                ['bp_evisc_kg',    'bp_evisc_persen',    'BP Evisc',              58],
-                ['final_yield_kg', 'final_yield_persen', 'Yield FG Total',        59],
+                ['rm_h0_kg',       'rm_h0_persen',       'RM Input Griller (H0)', 14],
+                ['fg_bp_kg',       'fg_bp_persen',       'FG + BP',               56],
+                ['bp_evisc_kg',    'bp_evisc_persen',    'BP Evisc',              57],
+                ['final_yield_kg', 'final_yield_persen', 'Yield FG Total',        58],
             ];
             foreach ($cekPersen as [$kolomKg, $kolomPersen, $nama, $baris]) {
                 $diharapkan = $nilai[$kolomKg] / $nilai['berat_bersih'];
