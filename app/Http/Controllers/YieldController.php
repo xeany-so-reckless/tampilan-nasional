@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -30,55 +31,64 @@ class YieldController extends Controller
     // Toleransi selisih kg saat cek Yield FG Total = FG+BP + BP Evisc
     private const TOLERANSI_KG = 0.5;
 
+    // Baris header per blok hari di template
+    private const BARIS_PLANT   = 2;   // nama plant
+    private const BARIS_TANGGAL = 3;   // tanggal laporan
+    private const BARIS_JENIS   = 4;   // "ALL" / "Super Jumbo" / "Jumbo" / "Non Jumbo"
+    private const KOLOM_AWAL    = 3;   // kolom C (blok hari pertama mulai dari sini)
+
     /**
-     * Peta kolom database -> alamat sel di template Excel Yield (kolom ALL: C = Qty Kg, D = %).
-     * Template dijamin sama untuk semua plant, jadi dibaca dari alamat tetap.
+     * Peta kolom database -> [nomor baris, sisi] di template Excel Yield.
+     * sisi 0 = kolom Qty (Kg), sisi 1 = kolom % (tepat di kanan kolom Qty).
+     *
+     * Satu file bisa berisi banyak hari: tiap hari adalah satu blok kolom (ALL, Super Jumbo,
+     * Jumbo, Non Jumbo). Yang dibaca hanya kolom "ALL" tiap blok, posisinya dicari otomatis
+     * dari header baris 4, jadi nomor baris di sini sama untuk semua hari.
      * Kalau ada baris yang bergeser, pengecekan label (lihat $labelWajib) akan menolak upload.
      */
-    private array $petaSel = [
+    private array $petaBaris = [
         // Livebirds
-        'sppa_lb_ekor'       => 'C7',
-        'sppa_lb_kg'         => 'C8',
-        'abw'                => 'C9',
-        'ayam_mati_ekor'     => 'C10',
-        'susut_kg'           => 'C11',
-        'susut_persen'       => 'C12',
-        'berat_bersih'       => 'C13',
+        'sppa_lb_ekor'       => [7, 0],
+        'sppa_lb_kg'         => [8, 0],
+        'abw'                => [9, 0],
+        'ayam_mati_ekor'     => [10, 0],
+        'susut_kg'           => [11, 0],
+        'susut_persen'       => [12, 0],
+        'berat_bersih'       => [13, 0],
         // RM Input Griller (H0) = titik nol
-        'rm_h0_kg'           => 'C15',
-        'rm_h0_persen'       => 'D15',
+        'rm_h0_kg'           => [15, 0],
+        'rm_h0_persen'       => [15, 1],
         // H1 Griller
-        'rm_griller_kg'      => 'C18',
-        'h1_kg'              => 'C19',
-        'h1_persen'          => 'D19',
+        'rm_griller_kg'      => [18, 0],
+        'h1_kg'              => [19, 0],
+        'h1_persen'          => [19, 1],
         // H2 Parting
-        'rm_parting_kg'      => 'C27',
-        'h2_kg'              => 'C33',
-        'h2_persen'          => 'D33',
+        'rm_parting_kg'      => [27, 0],
+        'h2_kg'              => [33, 0],
+        'h2_persen'          => [33, 1],
         // H3 Cut Up
-        'rm_cutup_kg'        => 'C36',
-        'h3_kg'              => 'C44',
-        'h3_persen'          => 'D44',
+        'rm_cutup_kg'        => [36, 0],
+        'h3_kg'              => [44, 0],
+        'h3_persen'          => [44, 1],
         // H4 Boneless
-        'rm_boneless_kg'     => 'C47',
-        'h4_kg'              => 'C54',
-        'h4_persen'          => 'D54',
+        'rm_boneless_kg'     => [47, 0],
+        'h4_kg'              => [54, 0],
+        'h4_persen'          => [54, 1],
         // Total
-        'fg_bp_kg'           => 'C57',
-        'fg_bp_persen'       => 'D57',
-        'bp_evisc_kg'        => 'C58',
-        'bp_evisc_persen'    => 'D58',
-        'final_yield_kg'     => 'C59',
-        'final_yield_persen' => 'D59',
-        'lost_kg'            => 'C60',
-        'lost_persen'        => 'D60',
+        'fg_bp_kg'           => [57, 0],
+        'fg_bp_persen'       => [57, 1],
+        'bp_evisc_kg'        => [58, 0],
+        'bp_evisc_persen'    => [58, 1],
+        'final_yield_kg'     => [59, 0],
+        'final_yield_persen' => [59, 1],
+        'lost_kg'            => [60, 0],
+        'lost_persen'        => [60, 1],
     ];
 
     /**
      * Label kunci di kolom B (nomor baris => teks awal yang diharapkan, tidak peka huruf besar/kecil).
-     * Dipakai sebagai pengaman: kalau baris template bergeser/berubah, upload ditolak
-     * daripada membaca angka dari baris yang salah. Pakai awalan karena sebagian label
-     * memuat angka target yang bisa berubah, mis. "Grand Total Qty FG+BP (71,5%)".
+     * Kolom B sama untuk semua hari, jadi cukup dicek sekali per file. Dipakai sebagai pengaman:
+     * kalau baris template bergeser/berubah, upload ditolak daripada membaca angka dari baris yang salah.
      */
     private array $labelWajib = [
         7  => 'SPPA LB (EKOR)',
@@ -241,12 +251,13 @@ class YieldController extends Controller
     }
 
     /**
-     * Upload Excel Yield. 1 file = 1 plant = 1 hari.
+     * Upload Excel Yield. 1 file = 1 plant = 1 sampai banyak hari (tiap hari satu blok kolom).
      *
      * Ada 2 tahap, memakai endpoint yang sama, dibedakan parameter "simpan":
      *  - simpan = 0 (default): HANYA membaca & memvalidasi file, mengembalikan pratinjau
-     *    (tanggal, angka kunci, dan apakah akan menimpa data lama). Tidak ada yang disimpan.
-     *  - simpan = 1: membaca file lagi dan menyimpan (plant + tanggal yang sama ditimpa).
+     *    (daftar hari, angka kunci, dan hari mana yang akan menimpa data lama). Tidak ada yang disimpan.
+     *  - simpan = 1: membaca file lagi dan menyimpan semua hari dalam 1 transaksi
+     *    (plant + tanggal yang sama ditimpa). Satu hari bermasalah = seluruh file ditolak.
      *
      * Kode otorisasi divalidasi di KEDUA tahap.
      */
@@ -277,24 +288,57 @@ class YieldController extends Controller
         $simpan = $request->input('simpan') === '1';
 
         try {
-            $hasil      = $this->bacaExcel($request->file('file')->getRealPath(), $plant);
-            $tanggal    = $hasil['tanggal'];
-            $tanggalStr = $tanggal->format('Y-m-d');
-            $nilai      = $hasil['nilai'];
+            $hasil = $this->bacaExcel($request->file('file')->getRealPath(), $plant);
+            $hari  = $hasil['hari']; // sudah urut tanggal
+
+            $daftarTanggal = array_map(fn ($h) => $h['tanggal']->format('Y-m-d'), $hari);
+
+            // Tanggal yang sudah ada di database (untuk tanda "menimpa data lama")
+            $sudahAda = YieldReport::where('plant', $plant)
+                ->whereIn('tanggal', $daftarTanggal)
+                ->get()
+                ->map(fn ($r) => $r->tanggal instanceof \DateTimeInterface
+                    ? $r->tanggal->format('Y-m-d')
+                    : substr((string) $r->tanggal, 0, 10))
+                ->all();
+
+            $ringkasanHari = array_map(function ($h) use ($sudahAda) {
+                $t     = $h['tanggal'];
+                $nilai = $h['nilai'];
+                return [
+                    'tanggal'            => $t->format('Y-m-d'),
+                    'tanggal_label'      => $this->namaHari[$t->dayOfWeek] . ', ' . $t->day . ' ' . $this->namaBulan[$t->month] . ' ' . $t->year,
+                    'kolom'              => $h['kolom'],
+                    'berat_bersih'       => $nilai['berat_bersih'],
+                    'abw'                => $nilai['abw'],
+                    'titik_nol_persen'   => $nilai['rm_h0_persen'],
+                    'fg_bp_persen'       => $nilai['fg_bp_persen'],
+                    'bp_evisc_persen'    => $nilai['bp_evisc_persen'],
+                    'final_yield_persen' => $nilai['final_yield_persen'],
+                    'akan_ditimpa'       => in_array($t->format('Y-m-d'), $sudahAda, true),
+                ];
+            }, $hari);
+
+            $pertama = $hari[0]['tanggal'];
+            $terakhir = $hari[count($hari) - 1]['tanggal'];
+
+            $rentangLabel = count($hari) === 1
+                ? $pertama->day . ' ' . $this->namaBulan[$pertama->month] . ' ' . $pertama->year
+                : $pertama->day . ' ' . $this->namaBulan[$pertama->month] . ' ' . $pertama->year
+                    . ' - ' . $terakhir->day . ' ' . $this->namaBulan[$terakhir->month] . ' ' . $terakhir->year;
 
             $ringkasan = [
-                'tanggal'            => $tanggalStr,
-                'tanggal_label'      => $this->namaHari[$tanggal->dayOfWeek] . ', ' . $tanggal->day . ' ' . $this->namaBulan[$hasil['bulan']] . ' ' . $hasil['tahun'],
-                'bulan'              => $hasil['bulan'],
-                'tahun'              => $hasil['tahun'],
-                'bulan_nama'         => $this->namaBulan[$hasil['bulan']] . ' ' . $hasil['tahun'],
-                'berat_bersih'       => $nilai['berat_bersih'],
-                'abw'                => $nilai['abw'],
-                'titik_nol_persen'   => $nilai['rm_h0_persen'],
-                'fg_bp_persen'       => $nilai['fg_bp_persen'],
-                'bp_evisc_persen'    => $nilai['bp_evisc_persen'],
-                'final_yield_persen' => $nilai['final_yield_persen'],
-                'akan_ditimpa'       => YieldReport::where('plant', $plant)->where('tanggal', $tanggalStr)->exists(),
+                'jumlah_hari'    => count($hari),
+                'tanggal_awal'   => $pertama->format('Y-m-d'),
+                'tanggal_akhir'  => $terakhir->format('Y-m-d'),
+                'rentang_label'  => $rentangLabel,
+                'jumlah_ditimpa' => count(array_filter($ringkasanHari, fn ($r) => $r['akan_ditimpa'])),
+                'hari'           => $ringkasanHari,
+                'dilewati'       => $hasil['dilewati'], // blok kolom kosong yang tidak diproses
+                // Periode untuk lompat tampilan dashboard: bulan data terakhir di file
+                'bulan'          => $terakhir->month,
+                'tahun'          => $terakhir->year,
+                'bulan_nama'     => $this->namaBulan[$terakhir->month] . ' ' . $terakhir->year,
             ];
 
             if (!$simpan) {
@@ -305,25 +349,27 @@ class YieldController extends Controller
                 ]);
             }
 
-            DB::transaction(function () use ($plant, $region, $tanggalStr, $hasil, $nilai) {
-                // Replace data lama untuk plant + tanggal ini saja, supaya upload ulang tidak duplikat
-                YieldReport::where('plant', $plant)->where('tanggal', $tanggalStr)->delete();
+            DB::transaction(function () use ($plant, $region, $hari, $daftarTanggal) {
+                // Replace data lama untuk plant + semua tanggal di file ini saja, supaya upload ulang tidak duplikat
+                YieldReport::where('plant', $plant)->whereIn('tanggal', $daftarTanggal)->delete();
 
-                YieldReport::create(array_merge([
-                    'region'  => $region,
-                    'plant'   => $plant,
-                    'tanggal' => $tanggalStr,
-                    'bulan'   => $hasil['bulan'],
-                    'tahun'   => $hasil['tahun'],
-                ], $nilai));
+                foreach ($hari as $h) {
+                    YieldReport::create(array_merge([
+                        'region'  => $region,
+                        'plant'   => $plant,
+                        'tanggal' => $h['tanggal']->format('Y-m-d'),
+                        'bulan'   => $h['tanggal']->month,
+                        'tahun'   => $h['tanggal']->year,
+                    ], $h['nilai']));
+                }
             });
 
             return response()->json([
                 'message'   => 'Upload berhasil diproses.',
                 'plant'     => $plant,
                 'ringkasan' => $ringkasan,
-                'bulan'     => $hasil['bulan'],
-                'tahun'     => $hasil['tahun'],
+                'bulan'     => $terakhir->month,
+                'tahun'     => $terakhir->year,
             ]);
         } catch (\RuntimeException $e) {
             // Pesan validasi template/data yang sengaja dibuat agar bisa langsung ditampilkan ke user
@@ -337,10 +383,14 @@ class YieldController extends Controller
     }
 
     /**
-     * Baca 1 file Excel template Yield (1 plant, 1 hari) dari alamat sel tetap, lalu validasi.
+     * Baca 1 file Excel template Yield (1 plant, 1 sampai banyak hari), lalu validasi.
      *
      * Melempar \RuntimeException berisi pesan yang bisa langsung ditampilkan ke user.
-     * Mengembalikan: ['tanggal' => Carbon, 'bulan' => int, 'tahun' => int, 'nilai' => [kolom => float]]
+     * Mengembalikan:
+     *  [
+     *    'hari'     => [ ['tanggal' => Carbon, 'kolom' => 'K', 'nilai' => [kolom_db => float]], ... ]  (urut tanggal)
+     *    'dilewati' => [ 'Kolom S: ...', ... ]   (blok kolom tanpa tanggal / tanpa data produksi)
+     *  ]
      */
     private function bacaExcel(string $path, string $plantDipilih): array
     {
@@ -357,7 +407,8 @@ class YieldController extends Controller
             }
             $sheet ??= $spreadsheet->getActiveSheet();
 
-            // 1) Pastikan ini template Yield
+            // 1) Pastikan ini template Yield (judul boleh memuat bulan apa saja; tanggal sebenarnya
+            //    dibaca per hari dari baris 3, jadi bulan di judul tidak dipakai untuk validasi)
             $judul = $this->strOrNull($this->nilaiSel($sheet, 'B1'));
             if ($judul === null || stripos($judul, 'MONITORING YIELD') === false) {
                 throw new \RuntimeException('Template tidak dikenali. Pastikan file memakai template "FORM PERHITUNGAN INDEX GRILLER (MONITORING YIELD)".');
@@ -380,78 +431,148 @@ class YieldController extends Controller
                 );
             }
 
-            // 3) Plant di file harus sama dengan plant yang dipilih saat upload
-            $plantExcel = $this->strOrNull($this->nilaiSel($sheet, 'C2')) ?? $sheet->getTitle();
-            if (!$this->samaPlant($plantExcel, $plantDipilih)) {
-                throw new \RuntimeException("Plant di file (\"{$plantExcel}\") tidak sama dengan plant yang dipilih (\"{$plantDipilih}\"). Periksa kembali pilihan plant atau file yang diupload.");
-            }
-
-            // 4) Tanggal laporan (C3) + cek terhadap bulan di judul (B1)
-            $tanggal = $this->bacaTanggal($this->nilaiSel($sheet, 'C3'));
-            $bulan   = $tanggal->month;
-            $tahun   = $tanggal->year;
-
-            $bulanJudul = $this->bulanTahunDariJudul($judul);
-            if ($bulanJudul === null) {
-                throw new \RuntimeException("Bulan pada judul (\"{$judul}\") tidak terbaca. Pastikan judul memuat nama bulan dan tahun, mis. \"... SEPTEMBER 2026\".");
-            }
-            if ($bulanJudul[0] !== $bulan || $bulanJudul[1] !== $tahun) {
-                throw new \RuntimeException(
-                    'Tanggal laporan (' . $tanggal->day . ' ' . $this->namaBulan[$bulan] . ' ' . $tahun . ') tidak sesuai dengan bulan pada judul ('
-                    . $this->namaBulan[$bulanJudul[0]] . ' ' . $bulanJudul[1] . '). Perbaiki tanggal atau judul di Excel lalu upload ulang.'
-                );
-            }
-
-            // 5) Baca semua angka. Sel inti wajib berisi angka; sel lain yang kosong/error dianggap 0
-            //    (mis. #DIV/0! pada hari tanpa produksi di seksi tertentu).
-            $inti  = ['berat_bersih' => 'Berat Bersih', 'final_yield_kg' => 'Yield FG Total (Qty)', 'final_yield_persen' => 'Yield FG Total (%)'];
-            $nilai = [];
-            foreach ($this->petaSel as $kolom => $alamat) {
-                $nilai[$kolom] = isset($inti[$kolom])
-                    ? $this->angkaInti($sheet, $alamat, $inti[$kolom])
-                    : $this->angka($sheet, $alamat);
-            }
-
-            // 6) Cek silang
-            if ($nilai['berat_bersih'] <= 0) {
-                throw new \RuntimeException('Berat Bersih (C13) bernilai 0, artinya tidak ada data produksi di file ini.');
-            }
-
-            $totalKomponen = $nilai['fg_bp_kg'] + $nilai['bp_evisc_kg'];
-            if (abs($nilai['final_yield_kg'] - $totalKomponen) > self::TOLERANSI_KG) {
-                throw new \RuntimeException(
-                    'Yield FG Total (C59 = ' . number_format($nilai['final_yield_kg'], 2, ',', '.') . ' kg) tidak sama dengan FG+BP (C57) + BP Evisc (C58) = '
-                    . number_format($totalKomponen, 2, ',', '.') . ' kg. Periksa rumus di Excel.'
-                );
-            }
-
-            $cekPersen = [
-                ['rm_h0_kg',      'rm_h0_persen',       'RM Input Griller (H0)',  'D15'],
-                ['fg_bp_kg',      'fg_bp_persen',       'FG + BP',                'D57'],
-                ['bp_evisc_kg',   'bp_evisc_persen',    'BP Evisc',               'D58'],
-                ['final_yield_kg', 'final_yield_persen', 'Yield FG Total',        'D59'],
-            ];
-            foreach ($cekPersen as [$kolomKg, $kolomPersen, $nama, $alamatPersen]) {
-                $diharapkan = $nilai[$kolomKg] / $nilai['berat_bersih'];
-                if (abs($nilai[$kolomPersen] - $diharapkan) > self::TOLERANSI_PERSEN) {
-                    throw new \RuntimeException(
-                        "Persen {$nama} ({$alamatPersen}) terbaca " . number_format($nilai[$kolomPersen] * 100, 2, ',', '.')
-                        . '%, tidak sesuai dengan Qty ÷ Berat Bersih = ' . number_format($diharapkan * 100, 2, ',', '.')
-                        . '%. Pastikan persen berformat desimal (0,93 = 93%) dan rumus tidak diubah.'
-                    );
+            // 3) Cari semua blok hari: kolom yang header baris 4-nya "ALL"
+            $kolomTerakhir = Coordinate::columnIndexFromString($sheet->getHighestColumn());
+            $blokKolom = [];
+            for ($k = self::KOLOM_AWAL; $k <= $kolomTerakhir; $k++) {
+                $jenis = $this->normalisasiLabel($this->nilaiSel($sheet, Coordinate::stringFromColumnIndex($k) . self::BARIS_JENIS));
+                if ($jenis === 'all') {
+                    $blokKolom[] = $k;
                 }
             }
+            if (count($blokKolom) === 0) {
+                throw new \RuntimeException('Kolom hari tidak ditemukan. Pastikan header "ALL" ada di baris ' . self::BARIS_JENIS . ' (mulai kolom C).');
+            }
+
+            // 4) Baca & validasi tiap blok hari
+            $hari      = [];
+            $dilewati  = [];
+            $tanggalDi = []; // 'Y-m-d' => huruf kolom, untuk deteksi tanggal ganda
+            foreach ($blokKolom as $kolomQty) {
+                $blok = $this->bacaBlok($sheet, $kolomQty, $plantDipilih);
+
+                if (isset($blok['dilewati'])) {
+                    $dilewati[] = $blok['dilewati'];
+                    continue;
+                }
+
+                $tglStr = $blok['tanggal']->format('Y-m-d');
+                if (isset($tanggalDi[$tglStr])) {
+                    throw new \RuntimeException(
+                        'Tanggal ' . $blok['tanggal']->format('d/m/Y') . ' muncul dua kali di file (kolom ' . $tanggalDi[$tglStr] . ' dan ' . $blok['kolom']
+                        . '). Perbaiki tanggal di Excel lalu upload ulang.'
+                    );
+                }
+                $tanggalDi[$tglStr] = $blok['kolom'];
+
+                $hari[] = $blok;
+            }
+
+            if (count($hari) === 0) {
+                throw new \RuntimeException('Tidak ada data produksi di file ini (semua kolom hari kosong atau Berat Bersih 0).');
+            }
+
+            usort($hari, fn ($a, $b) => $a['tanggal'] <=> $b['tanggal']);
 
             return [
-                'tanggal' => $tanggal,
-                'bulan'   => $bulan,
-                'tahun'   => $tahun,
-                'nilai'   => $nilai,
+                'hari'     => $hari,
+                'dilewati' => $dilewati,
             ];
         } finally {
             $spreadsheet->disconnectWorksheets();
             unset($spreadsheet);
         }
+    }
+
+    /**
+     * Baca 1 blok hari (kolom ALL: Qty di $kolomQty, % di kolom sebelah kanannya).
+     *
+     * Mengembalikan salah satu:
+     *  - ['dilewati' => 'alasan']                      blok kosong (tanpa tanggal / tanpa data produksi)
+     *  - ['tanggal' => Carbon, 'kolom' => 'K', 'nilai' => [...]]   blok valid
+     * Melempar \RuntimeException (diawali nama kolom + tanggal) kalau isinya bermasalah.
+     */
+    private function bacaBlok(Worksheet $sheet, int $kolomQty, string $plantDipilih): array
+    {
+        $huruf  = Coordinate::stringFromColumnIndex($kolomQty);
+        $alamat = fn (int $sisi, int $baris) => Coordinate::stringFromColumnIndex($kolomQty + $sisi) . $baris;
+
+        // Tanggal blok ini (baris 3). Tanpa tanggal = blok kosong, dilewati.
+        $alamatTanggal = $alamat(0, self::BARIS_TANGGAL);
+        $rawTanggal    = $this->nilaiSel($sheet, $alamatTanggal);
+        if ($rawTanggal === null || $rawTanggal === '' || $this->selError($rawTanggal)) {
+            return ['dilewati' => "Kolom {$huruf}: tanggal kosong"];
+        }
+
+        try {
+            $tanggal = $this->bacaTanggal($rawTanggal, $alamatTanggal);
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("Kolom {$huruf}: " . $e->getMessage());
+        }
+
+        $label = "Kolom {$huruf} (" . $tanggal->format('d/m/Y') . ')';
+
+        // Berat Bersih kosong / error / 0 = hari tanpa produksi, dilewati (bukan error)
+        $rawBB = $this->nilaiSel($sheet, $alamat(0, 13));
+        if ($rawBB === null || $rawBB === '' || $this->selError($rawBB) || (is_numeric($rawBB) && (float) $rawBB <= 0)) {
+            return ['dilewati' => "{$label}: tidak ada data produksi (Berat Bersih kosong/0)"];
+        }
+
+        try {
+            // Plant di blok ini harus sama dengan plant yang dipilih saat upload
+            $plantExcel = $this->strOrNull($this->nilaiSel($sheet, $alamat(0, self::BARIS_PLANT))) ?? $sheet->getTitle();
+            if (!$this->samaPlant($plantExcel, $plantDipilih)) {
+                throw new \RuntimeException("Plant di file (\"{$plantExcel}\") tidak sama dengan plant yang dipilih (\"{$plantDipilih}\"). Periksa kembali pilihan plant atau file yang diupload.");
+            }
+
+            // Baca semua angka. Sel inti wajib berisi angka; sel lain yang kosong/error dianggap 0
+            // (mis. #DIV/0! pada hari tanpa produksi di seksi tertentu).
+            $inti  = ['berat_bersih' => 'Berat Bersih', 'final_yield_kg' => 'Yield FG Total (Qty)', 'final_yield_persen' => 'Yield FG Total (%)'];
+            $nilai = [];
+            foreach ($this->petaBaris as $kolom => [$baris, $sisi]) {
+                $nilai[$kolom] = isset($inti[$kolom])
+                    ? $this->angkaInti($sheet, $alamat($sisi, $baris), $inti[$kolom])
+                    : $this->angka($sheet, $alamat($sisi, $baris));
+            }
+
+            // Cek silang
+            if ($nilai['berat_bersih'] <= 0) {
+                throw new \RuntimeException('Berat Bersih (' . $alamat(0, 13) . ') bernilai 0, artinya tidak ada data produksi.');
+            }
+
+            $totalKomponen = $nilai['fg_bp_kg'] + $nilai['bp_evisc_kg'];
+            if (abs($nilai['final_yield_kg'] - $totalKomponen) > self::TOLERANSI_KG) {
+                throw new \RuntimeException(
+                    'Yield FG Total (' . $alamat(0, 59) . ' = ' . number_format($nilai['final_yield_kg'], 2, ',', '.') . ' kg) tidak sama dengan FG+BP (' . $alamat(0, 57)
+                    . ') + BP Evisc (' . $alamat(0, 58) . ') = ' . number_format($totalKomponen, 2, ',', '.') . ' kg. Periksa rumus di Excel.'
+                );
+            }
+
+            $cekPersen = [
+                ['rm_h0_kg',       'rm_h0_persen',       'RM Input Griller (H0)', 15],
+                ['fg_bp_kg',       'fg_bp_persen',       'FG + BP',               57],
+                ['bp_evisc_kg',    'bp_evisc_persen',    'BP Evisc',              58],
+                ['final_yield_kg', 'final_yield_persen', 'Yield FG Total',        59],
+            ];
+            foreach ($cekPersen as [$kolomKg, $kolomPersen, $nama, $baris]) {
+                $diharapkan = $nilai[$kolomKg] / $nilai['berat_bersih'];
+                if (abs($nilai[$kolomPersen] - $diharapkan) > self::TOLERANSI_PERSEN) {
+                    throw new \RuntimeException(
+                        "Persen {$nama} (" . $alamat(1, $baris) . ') terbaca ' . number_format($nilai[$kolomPersen] * 100, 2, ',', '.')
+                        . '%, tidak sesuai dengan Qty ÷ Berat Bersih = ' . number_format($diharapkan * 100, 2, ',', '.')
+                        . '%. Pastikan persen berformat desimal (0,93 = 93%) dan rumus tidak diubah.'
+                    );
+                }
+            }
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException("{$label}: " . $e->getMessage());
+        }
+
+        return [
+            'tanggal' => $tanggal,
+            'kolom'   => $huruf,
+            'nilai'   => $nilai,
+        ];
     }
 
     /**
@@ -510,13 +631,13 @@ class YieldController extends Controller
     }
 
     /**
-     * Tanggal laporan dari sel C3. Mendukung: tanggal Excel (angka serial), teks "01/09/2026",
-     * "01-09-2026", atau "1 September 2026".
+     * Tanggal laporan dari sel tanggal blok ($alamat, mis. C3 / K3). Mendukung: tanggal Excel
+     * (angka serial), teks "01/09/2026", "01-09-2026", atau "1 September 2026".
      */
-    private function bacaTanggal($v): Carbon
+    private function bacaTanggal($v, string $alamat): Carbon
     {
         if ($v === null || $v === '' || $this->selError($v)) {
-            throw new \RuntimeException('Tanggal laporan (sel C3) kosong atau error.');
+            throw new \RuntimeException("Tanggal laporan (sel {$alamat}) kosong atau error.");
         }
 
         // Tanggal asli Excel (angka serial)
@@ -537,26 +658,10 @@ class YieldController extends Controller
         }
 
         if ($d === null || $m === null || !checkdate($m, $d, $y)) {
-            throw new \RuntimeException("Tanggal laporan pada sel C3 (\"{$teks}\") tidak terbaca. Isi dengan format tanggal Excel, mis. 01/09/2026.");
+            throw new \RuntimeException("Tanggal laporan pada sel {$alamat} (\"{$teks}\") tidak terbaca. Isi dengan format tanggal Excel, mis. 01/09/2026.");
         }
 
         return Carbon::create($y, $m, $d)->startOfDay();
-    }
-
-    /**
-     * Cari "NamaBulan YYYY" pertama yang valid di judul. Mis. "... YIELD) SEPTEMBER 2026" -> [9, 2026].
-     */
-    private function bulanTahunDariJudul(string $judul): ?array
-    {
-        if (preg_match_all('/([A-Za-z]+)\s+(\d{4})/u', $judul, $semua, PREG_SET_ORDER)) {
-            foreach ($semua as $m) {
-                $bulan = $this->bulanDariNama($m[1]);
-                if ($bulan !== null) {
-                    return [$bulan, (int) $m[2]];
-                }
-            }
-        }
-        return null;
     }
 
     private function bulanDariNama(string $nama): ?int

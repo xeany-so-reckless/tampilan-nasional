@@ -72,7 +72,7 @@
             <!-- Control Panel: Upload Data Harian -->
             <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                 <h2 class="text-base font-bold text-slate-900 mb-1">Upload Data Yield Produksi</h2>
-                <p class="text-xs text-slate-500 mb-5">Pilih plant, lalu klik Upload Excel dan masukkan kode otorisasi plant. 1 file = 1 plant = 1 hari; tanggal dibaca otomatis dari file. Upload ulang untuk tanggal yang sama akan menimpa data lama.</p>
+                <p class="text-xs text-slate-500 mb-5">Pilih plant, lalu klik Upload Excel dan masukkan kode otorisasi plant. 1 file = 1 plant, boleh berisi satu hari atau beberapa hari (tiap hari satu blok kolom); tanggal dibaca otomatis dari file. Upload ulang untuk tanggal yang sama akan menimpa data lama.</p>
 
                 <div class="flex flex-wrap items-end gap-4">
                     <div class="w-full md:w-72">
@@ -822,25 +822,70 @@
             return result;
         }
 
+        // Pratinjau upload (1 file bisa berisi banyak hari). r = respons server "ringkasan":
+        // { jumlah_hari, rentang_label, jumlah_ditimpa, hari: [...], dilewati: [...] }
         function ringkasanHtml(plant, r) {
-            const warna = (r.final_yield_persen * 100) >= TARGET ? '#047857' : '#b45309';
-            const baris = (label, nilai, tebal) =>
-                `<tr><td style="padding:4px 0; color:#64748b;">${label}</td><td style="padding:4px 0; text-align:right; ${tebal ? 'font-weight:700;' : ''}">${nilai}</td></tr>`;
+            const hari = r.hari || [];
+            const dilewati = r.dilewati || [];
+            const tglPendek = t => `${t.slice(8, 10)}/${t.slice(5, 7)}/${t.slice(0, 4)}`;
+            const warnaYield = v => (Number(v) * 100) >= TARGET ? '#047857' : '#b45309';
+
+            // Rata-rata berbobot Berat Bersih untuk seluruh hari di file
+            const totalBB = hari.reduce((a, h) => a + Number(h.berat_bersih || 0), 0);
+            const rataFinal = totalBB > 0
+                ? hari.reduce((a, h) => a + Number(h.final_yield_persen || 0) * Number(h.berat_bersih || 0), 0) / totalBB
+                : 0;
+
+            const tdKiri = 'padding:6px 8px; text-align:left; white-space:nowrap;';
+            const tdKanan = 'padding:6px 8px; text-align:right; white-space:nowrap;';
+            const thStyle = 'padding:6px 8px; position:sticky; top:0; background:#f8fafc; color:#64748b; font-weight:600; font-size:11px;';
+
+            const baris = hari.map(h => `
+                <tr style="border-top:1px solid #f1f5f9;">
+                    <td style="${tdKiri}">${escapeHtml(tglPendek(h.tanggal))}${h.akan_ditimpa ? ' <span style="background:#fef3c7; color:#92400e; font-size:10px; font-weight:700; padding:1px 6px; border-radius:6px; margin-left:4px;">timpa</span>' : ''}</td>
+                    <td style="${tdKanan}">${nf(h.berat_bersih, 0)}</td>
+                    <td style="${tdKanan}">${pct(h.titik_nol_persen)}</td>
+                    <td style="${tdKanan}">${pct(h.fg_bp_persen)}</td>
+                    <td style="${tdKanan} font-weight:700; color:${warnaYield(h.final_yield_persen)};">${pct(h.final_yield_persen)}</td>
+                </tr>`).join('');
+
+            const catatanDilewati = dilewati.length > 0
+                ? `<div style="font-size:12px; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:8px 10px; margin-top:10px;">
+                       <b>${dilewati.length} kolom dilewati</b> (kosong, tidak akan disimpan):<br>${dilewati.map(escapeHtml).join('<br>')}
+                   </div>`
+                : '';
 
             return `
                 <div style="text-align:left; font-size:14px;">
                     <div style="margin-bottom:12px;">
-                        Plant <b>${escapeHtml(plant)}</b> &middot; <b>${escapeHtml(r.tanggal_label)}</b>
-                        ${r.akan_ditimpa ? '<span style="background:#fef3c7; color:#92400e; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; margin-left:6px;">menimpa data lama</span>' : ''}
+                        Plant <b>${escapeHtml(plant)}</b> &middot; <b>${escapeHtml(r.jumlah_hari)} hari</b> &middot; ${escapeHtml(r.rentang_label)}
+                        ${r.jumlah_ditimpa > 0 ? `<span style="background:#fef3c7; color:#92400e; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; margin-left:6px;">${r.jumlah_ditimpa} hari menimpa data lama</span>` : ''}
                     </div>
-                    <table style="width:100%; font-size:13px; border-collapse:collapse;">
-                        ${baris('Berat Bersih', nf(r.berat_bersih, 0) + ' kg')}
-                        ${baris('ABW', nf(r.abw, 2) + ' kg/ekor')}
-                        ${baris('Yield Titik Nol', pct(r.titik_nol_persen))}
-                        ${baris('FG + BP Others', pct(r.fg_bp_persen))}
-                        ${baris('By Product Evisc', pct(r.bp_evisc_persen))}
-                        <tr><td style="padding:6px 0; border-top:1px solid #e2e8f0; font-weight:700;">Final Yield</td><td style="padding:6px 0; border-top:1px solid #e2e8f0; text-align:right; font-weight:700; color:${warna};">${pct(r.final_yield_persen)}</td></tr>
+                    <div style="max-height:280px; overflow:auto; border:1px solid #e2e8f0; border-radius:8px;">
+                        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="${thStyle} text-align:left;">Tanggal</th>
+                                    <th style="${thStyle} text-align:right;">Berat Bersih (kg)</th>
+                                    <th style="${thStyle} text-align:right;">Titik Nol</th>
+                                    <th style="${thStyle} text-align:right;">FG + BP</th>
+                                    <th style="${thStyle} text-align:right;">Final Yield</th>
+                                </tr>
+                            </thead>
+                            <tbody>${baris}</tbody>
+                        </table>
+                    </div>
+                    <table style="width:100%; font-size:13px; border-collapse:collapse; margin-top:10px;">
+                        <tr>
+                            <td style="padding:4px 0; color:#64748b;">Total Berat Bersih</td>
+                            <td style="padding:4px 0; text-align:right;">${nf(totalBB, 0)} kg</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 0; font-weight:700;">Rata-rata Final Yield (berbobot)</td>
+                            <td style="padding:4px 0; text-align:right; font-weight:700; color:${warnaYield(rataFinal)};">${pct(rataFinal)}</td>
+                        </tr>
                     </table>
+                    ${catatanDilewati}
                 </div>`;
         }
 
@@ -867,12 +912,14 @@
                 });
 
                 const pratinjau = await kirimFileYield(file, plant, kode, false);
+                const rp = pratinjau.ringkasan;
 
                 const konfirmasi = await Swal.fire({
-                    title: `Simpan data Plant ${escapeHtml(plant)}?`,
-                    html: ringkasanHtml(plant, pratinjau.ringkasan) +
-                        (pratinjau.ringkasan.akan_ditimpa ? '<div style="font-size:12px; color:#64748b; margin-top:12px;">Tanggal ini sudah punya data dan akan diganti dengan isi file ini.</div>' : ''),
+                    title: `Simpan ${rp.jumlah_hari} hari data Plant ${escapeHtml(plant)}?`,
+                    html: ringkasanHtml(plant, rp) +
+                        (rp.jumlah_ditimpa > 0 ? `<div style="font-size:12px; color:#64748b; margin-top:12px;">${rp.jumlah_ditimpa} tanggal sudah punya data dan akan diganti dengan isi file ini.</div>` : ''),
                     icon: 'question',
+                    width: '42rem',
                     showCancelButton: true,
                     confirmButtonText: 'Simpan',
                     cancelButtonText: 'Batal',
@@ -891,18 +938,19 @@
                 });
 
                 const result = await kirimFileYield(file, plant, kode, true);
+                const rs = result.ringkasan;
 
                 await Swal.fire({
                     title: 'Selesai!',
-                    html: `<div>Data Plant <b>${escapeHtml(result.plant)}</b> tanggal <b>${escapeHtml(result.ringkasan.tanggal_label)}</b> berhasil disimpan.</div>`,
+                    html: `<div>Data Plant <b>${escapeHtml(result.plant)}</b> sebanyak <b>${escapeHtml(rs.jumlah_hari)} hari</b> (${escapeHtml(rs.rentang_label)}) berhasil disimpan.</div>`,
                     icon: 'success',
                 });
 
                 const status = document.getElementById('uploadStatus');
                 status.classList.remove('hidden');
-                status.innerText = `✓ Data ${result.plant} tanggal ${result.ringkasan.tanggal_label} berhasil disimpan.`;
+                status.innerText = `✓ Data ${result.plant}: ${rs.jumlah_hari} hari (${rs.rentang_label}) berhasil disimpan.`;
 
-                // Pindah ke bulan data yang baru diupload
+                // Pindah ke bulan data yang baru diupload (bulan data terakhir di file)
                 currentBulan = result.bulan;
                 currentTahun = result.tahun;
 

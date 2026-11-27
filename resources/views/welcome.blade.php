@@ -245,7 +245,7 @@
                         onclick="window.location.href='{{ route('slaughter.yield.index') }}'">
                         <span class="badge-corner badge-active-neon">Active</span>
                         <div>
-                            <h6 class="fw-bold mb-1">Rekap Yield Mingguan</h6>
+                            <h6 class="fw-bold mb-1">Rekap Yield Daily</h6>
                             <small class="text-muted">Analisis persentase karkas</small>
                         </div>
                         <i class="fa-solid fa-scale-balanced fs-3 text-success"></i>
