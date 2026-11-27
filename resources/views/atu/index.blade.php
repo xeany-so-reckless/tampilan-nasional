@@ -314,7 +314,7 @@
                         </select>
                         <div class="d-flex flex-nowrap align-items-center gap-2">
                             <input type="month" id="monthSelect" class="form-control form-control-sm" style="width:170px;" onchange="setMonth(this.value)">
-                            <a href="{{ asset('templates/template_ATU.xls') }}" download="Template_ATU.xls" class="btn btn-template btn-sm text-nowrap">
+                            <a href="{{ asset('templates/Template_ATU.xls') }}" download="Template_ATU.xls" class="btn btn-template btn-sm text-nowrap"></a>
                                 <i class="fa-solid fa-file-arrow-down"></i> Download Template
                             </a>
                         </div>
