@@ -56,12 +56,12 @@
         .chart-panel { min-width: 0; }
         .chart-panel-title { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
         .chart-box { position: relative; height: 320px; }
-.chart-box.fade-in { animation: chartFadeUp 1.1s ease-out both; }
-@keyframes chartFadeUp {
-    from { opacity: 0; transform: translateY(18px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) { .chart-box.fade-in { animation: none; } }
+        .chart-box.fade-in { animation: chartFadeUp 1.1s ease-out both; }
+        @keyframes chartFadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) { .chart-box.fade-in { animation: none; } }
         @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
 
         /* Pilihan size untuk chart overview di atas */
@@ -149,7 +149,7 @@
             border-radius: var(--radius-sm);
             font-weight: 600;
         }
-                .btn-upload:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
+        .btn-upload:hover { background: #4338ca; border-color: #4338ca; color: #fff; }
 
         .btn-template {
             border: 1px solid var(--line);
@@ -159,6 +159,15 @@
             font-weight: 600;
         }
         .btn-template:hover { border-color: var(--accent); color: var(--accent); background: #fff; }
+        /* Pertahankan tampilan tombol saat ditekan / fokus (Bootstrap menimpa warna untuk class btn kustom) */
+        .btn.btn-template:focus,
+        .btn.btn-template:focus-visible,
+        .btn.btn-template:active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: #fff;
+            box-shadow: none;
+        }
 
         .form-select, .form-control { border-radius: var(--radius-sm); border-color: var(--line); color: var(--ink); }
         .form-select:focus, .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -308,7 +317,7 @@
                     <div id="regionTabs">
                         <button class="tab-region active" data-region="" onclick="setRegion('', this)">Nasional</button>
                     </div>
-                                        <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
+                    <div class="mt-2 d-flex flex-wrap align-items-center gap-2">
                         <select id="plantSelect" class="form-select form-select-sm" style="width:260px; max-width:100%;" onchange="setPlant(this.value)">
                             <option value="">-- Semua Plant --</option>
                         </select>
@@ -408,7 +417,7 @@
 
         let plantsByRegion = {};
         let allPlantsByRegion = {};
-                // Tanggal bawaan "ASJ mulai tercatat" (minggu pertama template baru), dipakai selama belum ada data ASJ di database.
+        // Tanggal bawaan "ASJ mulai tercatat" (minggu pertama template baru), dipakai selama belum ada data ASJ di database.
         // Ubah kalau tanggal mulainya berbeda.
         const ASJ_MULAI_DEFAULT = '2026-10-29';
         let asjMulai = null;                // tanggal mulai minggu paling awal yang punya data ASJ (Y-m-d), dari filterOptions
@@ -439,6 +448,24 @@
             if (!ymd) return '';
             const d = new Date(String(ymd).slice(0, 10) + 'T00:00:00');
             return d.getDate() + ' ' + BULAN_NAMA[d.getMonth() + 1].slice(0, 3) + ' ' + d.getFullYear();
+        }
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function addDaysYmd(ymd, n) {
+            const d = new Date(String(ymd).slice(0, 10) + 'T00:00:00');
+            d.setDate(d.getDate() + n);
+            return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+        }
+
+        // Kunci minggu seragam untuk pengelompokan di grafik.
+        // Template lama memakai Minggu-Sabtu (mulai hari Minggu), template baru Senin-Minggu.
+        // Minggu yang mulai hari Minggu digeser +1 hari ke Senin, supaya plant dengan template
+        // berbeda (mis. Makassar 1-7 Nov dan Jombang 2-8 Nov) dihitung sebagai minggu yang sama.
+        function weekKey(ymd) {
+            const s = String(ymd).slice(0, 10);
+            const d = new Date(s + 'T00:00:00');
+            return d.getDay() === 0 ? addDaysYmd(s, 1) : s;
         }
 
         function escapeHtml(v) {
@@ -764,11 +791,13 @@
         // Untuk chart atas: per minggu, 2 nilai saja (%Defect Farm & %Defect Proses).
         // size '' -> rata-rata semua size (weighted: total ekor / total LB); size tertentu -> hanya size itu.
         // Minggu yang LB-nya 0 diberi null (garis putus), bukan 0%.
+        // Pengelompokan memakai weekKey(): minggu Minggu-Sabtu (template lama) dan Senin-Minggu
+        // (template baru) yang setara digabung jadi satu minggu.
         function aggregateOverviewByWeek(rows, size) {
             const bucket = {};
             rows.forEach(r => {
-                const key = r.tanggal_mulai;
-                if (!bucket[key]) bucket[key] = { tanggal_mulai: key, tanggal_selesai: r.tanggal_selesai, lb: 0, farmEkor: 0, prosesEkor: 0 };
+                const key = weekKey(r.tanggal_mulai);
+                if (!bucket[key]) bucket[key] = { tanggal_mulai: key, tanggal_selesai: addDaysYmd(key, 6), lb: 0, farmEkor: 0, prosesEkor: 0 };
                 if (size && r.size !== size) return;
                 const b = bucket[key];
                 b.lb += Number(r.jumlah_lb || 0);
@@ -785,14 +814,14 @@
             return { labels, rentang, farm, proses };
         }
 
-        // Kelompokkan baris jadi per minggu (tanggal_mulai) -> per size, untuk sumbu-X & garis line chart.
+        // Kelompokkan baris jadi per minggu (weekKey) -> per size, untuk sumbu-X & garis line chart.
         // Persen dihitung dari total ekor / total LB (weighted). Size yang LB-nya 0 di minggu tertentu
         // diberi nilai null (garis putus), bukan 0%, supaya tidak terbaca seolah-olah tidak ada defect.
         function aggregateByWeekSize(rows) {
             const bucket = {};
             rows.forEach(r => {
-                const key = r.tanggal_mulai;
-                if (!bucket[key]) bucket[key] = { tanggal_mulai: key, tanggal_selesai: r.tanggal_selesai, sizes: {} };
+                const key = weekKey(r.tanggal_mulai);
+                if (!bucket[key]) bucket[key] = { tanggal_mulai: key, tanggal_selesai: addDaysYmd(key, 6), sizes: {} };
                 if (!bucket[key].sizes[r.size]) bucket[key].sizes[r.size] = { lb: 0, farmEkor: 0, prosesEkor: 0 };
                 const x = bucket[key].sizes[r.size];
                 x.lb += Number(r.jumlah_lb || 0);
