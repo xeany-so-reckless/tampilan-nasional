@@ -82,6 +82,16 @@
                         </select>
                     </div>
                     <button onclick="mulaiUploadExcel()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-2.5 rounded-xl transition duration-200 text-xs shadow-sm shadow-blue-500/20">Upload Excel</button>
+                    <a href="{{ asset('templates/' . rawurlencode('Yield Produksi Template.xls')) }}"
+                        download="Yield Produksi Template.xls"
+                        class="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200 font-semibold px-5 py-2.5 rounded-xl transition duration-200 text-xs">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3v12"/>
+                            <path d="M7 10l5 5 5-5"/>
+                            <path d="M5 21h14"/>
+                        </svg>
+                        Download Template
+                    </a>
                     <input type="file" id="excelUploadInput" accept=".xlsx,.xls" style="display:none;" onchange="handleExcelUpload(this)">
                 </div>
 
